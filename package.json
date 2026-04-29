@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Mission 31 — Lis le Nouveau Testament en 31 jours. PWA en HTML/CSS/JavaScript vanilla.",
+  "description": "Mission 31 : Lis le Nouveau Testament en 31 jours. PWA en HTML/CSS/JavaScript vanilla.",
   "license": "Apache-2.0",
   "scripts": {
     "dev": "vite",

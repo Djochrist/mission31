@@ -16,9 +16,10 @@
 - **Lectures accélérées** — rattrapez votre retard avec 2, 3, 5, 10 ou 15 jours d'un coup.
 - **Statistiques** — progression globale, streak, plus longue série, jours gagnés.
 - **Système de badges** — débloquez 9 récompenses différentes au fil de votre progression.
-- **Rappels** — notifications planifiées (1 ou 2 par jour) avec message personnalisable.
-- **PWA installable** — fonctionne hors ligne grâce au service worker et au cache.
-- **Partage social** — partagez votre progression sur WhatsApp ou via le partage natif du système.
+- **Rappels quotidiens** — notifications planifiées (1 à 4 par jour) avec message personnalisable, déclenchées via `Notification API` quand l'app est ouverte.
+- **PWA installable** — option d'installation **toujours visible** (bannière flottante + page Aide), avec barre de progression à l'installation et instructions iOS/Android dédiées.
+- **Partage social enrichi** — partagez votre progression sur WhatsApp ou via le partage natif du système avec une **image générée** du jour en cours (Web Share API + `<canvas>`).
+- **Versioning automatique du SW** — chaque build Vercel reçoit un identifiant unique (`VERCEL_GIT_COMMIT_SHA`), garantissant que les utilisateurs reçoivent la dernière version sans avoir à vider leur cache.
 - **Stockage local** — toute la progression est sauvegardée dans le `localStorage`. Aucune inscription, aucune donnée envoyée à un serveur.
 - **Stats globales en temps réel** (optionnel) — via Supabase, anonyme et respectueux de la vie privée.
 

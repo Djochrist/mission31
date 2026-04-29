@@ -1,10 +1,20 @@
 // ============================================================
-// MISSION 31 — Application principale (Vanilla JS · PWA)
+// MISSION 31 : Application principale (Vanilla JS · PWA)
 // ============================================================
 
 import { readings, passagesText } from "./data/readings.js";
 import { badges, unlockedBadges } from "./data/badges.js";
-import { syncProgress, fetchGlobalStats, supabaseEnabled } from "./supabase.js";
+import { registerUser, syncProgress, fetchGlobalStats, supabaseEnabled } from "./supabase.js";
+import {
+  loadBible,
+  parsePassage,
+  expandPassages,
+  getChapterVerses,
+  formatChapterLabel,
+  SINGLE_CHAPTER_BOOKS,
+  NT_BOOKS_ORDER,
+  BOOK_IDS,
+} from "./data/bible.js";
 
 // Liens & contacts (à un seul endroit pour éviter la duplication)
 const CONTACT_EMAIL = "djochristkfreelance@gmail.com";
@@ -14,13 +24,14 @@ const WHATSAPP_GROUP_URL = "https://chat.whatsapp.com/I3ofVHRDGPlEEmCtzSSsxV?mod
 // State management (localStorage backed)
 // ------------------------------------------------------------
 const STORAGE_KEY = "mission31:state:v1";
-const APP_START = new Date(2026, 4, 1); // 1er mai 2026
 
 const defaultState = {
   startedAt: null,
   progress: {},                // { 1: { done: true, doneAt, batchSize }, ... }
   reminders: { enabled: true, times: ["08:00", "20:00"], message: "N'oublie pas ta lecture du jour." },
-  installedDismissed: false,
+  lastSyncedAt: null,          // ISO date du dernier sync réussi (multi-appareils)
+  memoryVerses: [],            // [{ id, date: "YYYY-MM-DD", ref, text, addedAt }]
+  theme: "auto",               // "auto" | "light" | "dark"
 };
 
 function loadState() {
@@ -28,7 +39,12 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...defaultState };
     const parsed = JSON.parse(raw);
-    return { ...defaultState, ...parsed, reminders: { ...defaultState.reminders, ...(parsed.reminders || {}) } };
+    return {
+      ...defaultState,
+      ...parsed,
+      reminders: { ...defaultState.reminders, ...(parsed.reminders || {}) },
+      memoryVerses: Array.isArray(parsed.memoryVerses) ? parsed.memoryVerses : [],
+    };
   } catch {
     return { ...defaultState };
   }
@@ -41,14 +57,64 @@ function saveState() {
 let state = loadState();
 
 // ------------------------------------------------------------
+// Date helpers (basées sur la date réelle du téléphone)
+// ------------------------------------------------------------
+const MONTHS_FR = [
+  "janvier", "février", "mars", "avril", "mai", "juin",
+  "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+];
+const MONTHS_FR_SHORT = [
+  "janv.", "févr.", "mars", "avril", "mai", "juin",
+  "juil.", "août", "sept.", "oct.", "nov.", "déc.",
+];
+
+function startOfDay(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function addDays(d, n) {
+  const r = new Date(d);
+  r.setDate(r.getDate() + n);
+  return r;
+}
+
+function getStartDate() {
+  // Si l'utilisateur a démarré la mission, on prend cette date comme jour 1.
+  // Sinon, on simule avec aujourd'hui pour l'aperçu.
+  return state.startedAt ? startOfDay(new Date(state.startedAt)) : startOfDay(new Date());
+}
+
+function dateForDay(day) {
+  return addDays(getStartDate(), day - 1);
+}
+
+function formatShortDate(d) {
+  return `${d.getDate()} ${MONTHS_FR_SHORT[d.getMonth()]}`;
+}
+
+function formatLongDate(d) {
+  return `${d.getDate()} ${MONTHS_FR[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function formatRange(start, end) {
+  if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+    return `Du ${start.getDate()} au ${end.getDate()} ${MONTHS_FR[start.getMonth()]}`;
+  }
+  if (start.getFullYear() === end.getFullYear()) {
+    return `Du ${start.getDate()} ${MONTHS_FR_SHORT[start.getMonth()]} au ${end.getDate()} ${MONTHS_FR_SHORT[end.getMonth()]}`;
+  }
+  return `Du ${formatShortDate(start)} ${start.getFullYear()} au ${formatShortDate(end)} ${end.getFullYear()}`;
+}
+
+// ------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------
 function currentDay() {
-  // Si l'utilisateur a démarré, base sur la date de démarrage.
+  // Si l'utilisateur a démarré, base sur la date réelle du téléphone.
   if (!state.startedAt) return 1;
-  const startedAt = new Date(state.startedAt);
-  const now = new Date();
-  const diff = Math.floor((now - new Date(startedAt.getFullYear(), startedAt.getMonth(), startedAt.getDate())) / (1000 * 60 * 60 * 24));
+  const startedAt = startOfDay(new Date(state.startedAt));
+  const now = startOfDay(new Date());
+  const diff = Math.floor((now - startedAt) / (1000 * 60 * 60 * 24));
   return Math.min(31, Math.max(1, diff + 1));
 }
 
@@ -90,9 +156,27 @@ function daysGained() {
 function showToast(msg) {
   const t = document.createElement("div");
   t.className = "toast";
+  t.setAttribute("role", "status");
+  t.setAttribute("aria-live", "polite");
   t.textContent = msg;
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 3000);
+}
+
+// ------------------------------------------------------------
+// Détection plateforme & mode d'installation
+// ------------------------------------------------------------
+function isAppInstalled() {
+  if (typeof window === "undefined") return false;
+  if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) return true;
+  if (window.navigator.standalone === true) return true;
+  return false;
+}
+function isIOS() {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent || "") && !window.MSStream;
+}
+function isAndroid() {
+  return /Android/i.test(navigator.userAgent || "");
 }
 
 function markRead(daysCount = 1) {
@@ -103,6 +187,7 @@ function markRead(daysCount = 1) {
     state.progress[d] = { done: true, doneAt: new Date().toISOString(), batchSize: daysCount };
   }
   if (!state.startedAt) state.startedAt = new Date().toISOString();
+  state.lastSyncedAt = new Date().toISOString();
   saveState();
 
   // Synchronisation avec Supabase (silencieuse, n'affecte pas l'UX)
@@ -117,14 +202,28 @@ function markRead(daysCount = 1) {
 }
 
 // ------------------------------------------------------------
-// Router (hash-based)
+// Router (hash-based, avec support de query string)
+// Exemples : #/home  #/bible?day=1&i=0  #/bible?b=40&c=1  #/memory
 // ------------------------------------------------------------
-const routes = ["welcome", "home", "reading", "accelerated", "planning", "stats", "rewards", "share", "help", "offline", "reminders", "completion", "globalstats"];
+const routes = [
+  "welcome", "home", "reading", "accelerated", "planning", "stats", "rewards",
+  "share", "help", "offline", "reminders", "completion", "globalstats",
+  "bible", "memory", "settings",
+];
 
 function getRoute() {
   const h = (location.hash || "").replace(/^#\/?/, "");
-  if (!h) return state.startedAt ? "home" : "welcome";
-  return routes.includes(h) ? h : "home";
+  const [name, qs] = h.split("?");
+  const cleanName = name || "";
+  const params = {};
+  if (qs) {
+    for (const pair of qs.split("&")) {
+      const [k, v] = pair.split("=");
+      if (k) params[decodeURIComponent(k)] = v ? decodeURIComponent(v.replace(/\+/g, " ")) : "";
+    }
+  }
+  if (!cleanName) return { name: state.startedAt ? "home" : "welcome", params };
+  return { name: routes.includes(cleanName) ? cleanName : "home", params };
 }
 
 function navigate(r) {
@@ -178,6 +277,15 @@ const I = {
   plus: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
   close: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
   install: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+  // Icônes additionnelles : lecture du texte, mode sombre/clair, paramètres, mémorisation
+  bookOpen: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`,
+  bookmark: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`,
+  moon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`,
+  sun: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`,
+  settings: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  arrowRight: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`,
+  arrowLeft: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>`,
+  trash: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`,
 };
 
 const badgeIcons = { rocket: I.rocket, key: I.key, lock: I.lock, shield: I.shield, compass: I.compass, trophy: I.trophy, bolt: I.bolt, flame: I.flameSpec, medal: I.medal };
@@ -244,10 +352,11 @@ function viewWelcome() {
 function viewHome() {
   const day = currentDay();
   const today = readings.find((r) => r.day === day);
-  const passages = today ? today.passages.join(", ") : "—";
+  const passages = today ? today.passages.join(", ") : "...";
   const pct = progressPct();
   const completed = completedCount();
   const isTodayDone = state.progress[day]?.done;
+  const memVerse = todaysMemoryVerse();
 
   return `
     <div class="shell">
@@ -259,11 +368,25 @@ function viewHome() {
       <main class="view">
         <div class="home">
           <div class="card day-card">
-            <div class="day-card__label">${I.bibleSmall ? "" : ""}Jour <strong style="color:var(--primary);font-size:24px;font-weight:700;">${day}</strong> / 31</div>
+            <div class="day-card__label">Jour <strong style="color:var(--primary);font-size:24px;font-weight:700;">${day}</strong> / 31</div>
             <div class="day-card__sub" style="margin-top:14px;">Aujourd'hui</div>
             <div class="day-card__passages">${passages}</div>
-            <button class="btn" data-nav="reading">${isTodayDone ? "Relire aujourd'hui" : "Lire aujourd'hui"}</button>
+            <div class="day-card__actions">
+              <button class="btn" data-nav="bible?day=${day}&i=0">${I.bookOpen} ${isTodayDone ? "Relire aujourd'hui" : "Lire aujourd'hui"}</button>
+              <button class="btn btn--ghost" data-nav="reading">Voir le détail</button>
+            </div>
           </div>
+
+          ${memVerse ? `
+            <div class="card memory-today">
+              <div class="memory-today__head">
+                ${I.bookmark}
+                <span class="memory-today__label">Verset à mémoriser aujourd'hui</span>
+              </div>
+              <div class="memory-today__ref">${escapeHtml(memVerse.ref)}</div>
+              <div class="memory-today__text">« ${escapeHtml(memVerse.text)} »</div>
+            </div>
+          ` : ""}
 
           <div class="card progress-card">
             <div class="progress-card__head">
@@ -300,6 +423,7 @@ function viewReading() {
   const today = readings.find((r) => r.day === day);
   const passages = today ? today.passages : [];
   const isDone = state.progress[day]?.done;
+  const dateLabel = formatLongDate(dateForDay(day));
 
   return `
     <div class="shell">
@@ -310,14 +434,21 @@ function viewReading() {
       <main class="view">
         <div class="reading">
           <div class="reading__hero">
-            <div class="reading__day-label">${today.date}</div>
+            <div class="reading__day-label">${dateLabel}</div>
             <div class="reading__day-title">Jour ${day} / 31</div>
             <div class="reading__passage">${passages.join(", ")}</div>
           </div>
 
           <div class="reading__list">
             <h3 class="reading__list-title">À lire aujourd'hui</h3>
-            <div>${passages.map((p) => `<span class="reading__chip">${p}</span>`).join("")}</div>
+            <div class="reading__chapters">
+              ${expandPassages(passages).map((c, i) => `
+                <button class="reading__chapter" data-nav="bible?day=${day}&i=${i}">
+                  <span class="reading__chapter-name">${formatChapterLabel(c.name, c.chapter)}</span>
+                  <span class="reading__chapter-go">${I.bookOpen}</span>
+                </button>
+              `).join("")}
+            </div>
           </div>
 
           <div class="card">
@@ -330,7 +461,7 @@ function viewReading() {
 
           ${!isDone
             ? `<button class="btn" data-action="mark-today">${I.checkBig.replace("42", "20").replace("42", "20")} J'ai terminé ma lecture</button>`
-            : `<button class="btn btn--ghost" data-action="unmark-today">Lecture déjà validée — Annuler</button>`
+            : `<button class="btn btn--ghost" data-action="unmark-today">Lecture déjà validée. Annuler</button>`
           }
           <button class="btn btn--ghost" data-nav="share">Partager ma progression</button>
         </div>
@@ -361,7 +492,7 @@ function viewAccelerated() {
       <main class="view">
         <div class="accelerated">
           <p class="accelerated__intro">Combien de jours veux-tu valider ?</p>
-          <p class="accelerated__day">Tu es au jour ${day} — ${remaining} jours restants.</p>
+          <p class="accelerated__day">Tu es au jour ${day} : ${remaining} jours restants.</p>
 
           <div class="option-list">
             ${options.map((o) => `
@@ -389,6 +520,9 @@ function viewAccelerated() {
 
 function viewPlanning() {
   const today = currentDay();
+  const start = getStartDate();
+  const end = addDays(start, 30);
+  const headerLabel = formatRange(start, end);
   return `
     <div class="shell">
       ${topbar({
@@ -397,19 +531,20 @@ function viewPlanning() {
         rightActions: [`<button class="topbar__btn" data-nav="reminders">${I.bell}</button>`],
       })}
       <main class="view">
-        <p class="planning__sub">Mai · 31 jours pour finir</p>
+        <p class="planning__sub">${headerLabel} · 31 jours pour finir</p>
         <div class="planning-list">
           ${readings.map((r) => {
             const done = state.progress[r.day]?.done;
             const isToday = r.day === today;
             const cls = done ? "plan-row--done" : isToday ? "plan-row--today" : "";
+            const dateLabel = formatShortDate(dateForDay(r.day));
             return `
               <button class="plan-row ${cls}" data-day="${r.day}">
                 <span class="plan-row__check">${done ? I.check : isToday ? `<span style="font-size:11px;font-weight:700;color:var(--primary);">${r.day}</span>` : `<span style="font-size:11px;font-weight:600;color:var(--ink-faint);">${r.day}</span>`}</span>
                 <span>
                   <div class="plan-row__title">${r.passages.join(", ")}</div>
                 </span>
-                <span class="plan-row__date">${isToday ? "Aujourd'hui" : r.date}</span>
+                <span class="plan-row__date">${isToday ? "Aujourd'hui" : dateLabel}</span>
               </button>`;
           }).join("")}
         </div>
@@ -525,7 +660,7 @@ function viewShare() {
             <div class="share-card__icon">${I.bible}</div>
             <h2 class="share-card__title">MISSION 31</h2>
             <div class="share-card__day">JOUR <strong>${day}</strong> / 31</div>
-            <p class="share-card__msg">Je suis la mission et<br/>je lis le Nouveau Testament<br/>tout le mois de mai !</p>
+            <p class="share-card__msg">Je suis la mission et<br/>je lis le Nouveau Testament<br/>en 31 jours !</p>
             <span class="share-card__tag">#Mission31</span>
           </div>
 
@@ -540,10 +675,25 @@ function viewShare() {
 }
 
 function viewHelp() {
+  const installed = isAppInstalled();
   const items = [
+    { icon: I.bookmark,  title: "Versets à mémoriser", sub: "Programme et révise tes versets", nav: "memory", accent: true },
+    { icon: I.settings,  title: "Paramètres", sub: "Date de début, mode sombre", nav: "settings" },
     { icon: I.question,  title: "Comment fonctionne Mission 31 ?", action: "faq-how" },
     { icon: I.reading,   title: "Comment utiliser les lectures accélérées ?", action: "faq-acc" },
     { icon: I.bellSmall, title: "Notifications & rappels", nav: "reminders" },
+    !installed && {
+      icon: I.install,
+      title: "Installer l'application",
+      sub: "Accès rapide depuis l'écran d'accueil, fonctionne hors ligne",
+      action: "install",
+      accent: true,
+    },
+    installed && {
+      icon: I.checkBig.replace('width="42"', 'width="20"').replace('height="42"', 'height="20"'),
+      title: "Application installée",
+      sub: "Mission 31 fonctionne déjà comme une app native",
+    },
     {
       icon: I.whatsapp,
       title: "Rejoindre le groupe WhatsApp",
@@ -558,7 +708,7 @@ function viewHelp() {
       sub: CONTACT_EMAIL,
       href: `mailto:${CONTACT_EMAIL}?subject=Mission%2031`,
     },
-  ];
+  ].filter(Boolean);
   return `
     <div class="shell">
       ${topbar({ title: "Aide & Contact" })}
@@ -645,7 +795,7 @@ function viewReminders() {
 }
 
 function viewCompletion() {
-  const endDate = "31 Mai 2026";
+  const endDate = formatLongDate(dateForDay(31));
   return `
     <div class="shell">
       ${topbar({
@@ -683,14 +833,21 @@ function viewGlobalStats() {
         leftAction: `<button class="topbar__btn" data-action="back">${I.back}</button>`,
       })}
       <main class="view">
-        <div class="gstats" id="gstats">
+        <div class="gstats__hero">
+          <div class="gstats__hero-icon">${I.bible}</div>
+          <div class="gstats__hero-title">Mission 31</div>
+          <div class="gstats__hero-sub">Combien sommes-nous à lire le Nouveau Testament ?</div>
+        </div>
+
+        <div class="gstats" id="gstats" aria-live="polite">
           ${!supabaseEnabled ? `
             <div class="gstats__empty">
+              <div class="gstats__empty-icon">${I.bibleSmall}</div>
               <p><strong>Stats globales indisponibles.</strong></p>
-              <p>La connexion à la base de données n'est pas configurée. Voir le <code>README</code> pour activer Supabase.</p>
+              <p>La connexion à la base de données n'est pas configurée pour cet appareil.</p>
             </div>
           ` : `
-            <div class="gstats__loading">Chargement des statistiques…</div>
+            <div class="gstats__loading">Chargement des statistiques...</div>
           `}
         </div>
 
@@ -710,36 +867,284 @@ function renderGlobalStatsContent(data) {
   if (!data) {
     container.innerHTML = `
       <div class="gstats__empty">
+        <div class="gstats__empty-icon">${I.bibleSmall}</div>
         <p><strong>Données indisponibles.</strong></p>
         <p>Impossible de récupérer les statistiques pour le moment. Vérifie ta connexion et réessaie plus tard.</p>
+        <button class="btn btn--ghost" data-action="retry-stats" style="margin-top:12px;">Réessayer</button>
       </div>`;
     return;
   }
-  const { total_users = 0, completed_missions = 0, completion_rate = 0 } = data;
+  const total_users = Number(data.total_users || 0);
+  const completed_missions = Number(data.completed_missions || 0);
+  const completion_rate = Number(data.completion_rate || 0);
   container.innerHTML = `
     <div class="gstat">
       <div class="gstat__icon">${I.users}</div>
       <div>
-        <div class="gstat__value">${Number(total_users).toLocaleString("fr-FR")}</div>
-        <div class="gstat__label">Utilisateurs</div>
+        <div class="gstat__value">${total_users.toLocaleString("fr-FR")}</div>
+        <div class="gstat__label">${total_users <= 1 ? "Utilisateur" : "Utilisateurs"}</div>
       </div>
     </div>
     <div class="gstat">
       <div class="gstat__icon">${I.checkBig.replace('width="42"', 'width="20"').replace('height="42"', 'height="20"')}</div>
       <div>
-        <div class="gstat__value">${Number(completed_missions).toLocaleString("fr-FR")}</div>
-        <div class="gstat__label">Missions terminées</div>
+        <div class="gstat__value">${completed_missions.toLocaleString("fr-FR")}</div>
+        <div class="gstat__label">${completed_missions <= 1 ? "Mission terminée" : "Missions terminées"}</div>
       </div>
     </div>
     <div class="gstat">
       <div class="gstat__icon">${I.tabStats}</div>
       <div>
-        <div class="gstat__value">${Number(completion_rate)}%</div>
+        <div class="gstat__value">${completion_rate}%</div>
         <div class="gstat__label">Taux de complétion</div>
       </div>
     </div>
-    <p class="gstat__caption">Données réelles synchronisées depuis Supabase.</p>
+    <p class="gstat__caption">Données réelles synchronisées depuis la base anonyme.</p>
   `;
+}
+
+// ============================================================
+// Bible reader (Louis Segond 1910 · NT)
+// ============================================================
+// Construit la file d'attente des chapitres à afficher selon les params :
+//   - day=N         → tous les chapitres prévus pour le jour N du plan
+//   - b=ID&c=N      → un seul chapitre (lecture libre)
+// Sinon : tous les chapitres du jour courant.
+function bibleQueueFromParams(params) {
+  if (params.b && params.c) {
+    const id = parseInt(params.b, 10);
+    const chapter = parseInt(params.c, 10);
+    const name = NT_BOOKS_ORDER.find((n) => BOOK_IDS[n] === id);
+    if (name && chapter >= 1) return [{ id, name, chapter }];
+  }
+  const day = parseInt(params.day, 10) || currentDay();
+  const reading = readings.find((r) => r.day === day);
+  if (!reading) return [];
+  return expandPassages(reading.passages);
+}
+
+function viewBible(params) {
+  const queue = bibleQueueFromParams(params);
+  const idx = Math.max(0, Math.min(queue.length - 1, parseInt(params.i, 10) || 0));
+  const day = parseInt(params.day, 10) || currentDay();
+  const isFreeRead = !!(params.b && params.c);
+
+  // Titre & label
+  const current = queue[idx];
+  const title = current ? formatChapterLabel(current.name, current.chapter) : "Lecture";
+
+  return `
+    <div class="shell">
+      ${topbar({
+        title: title,
+        leftAction: `<button class="topbar__btn" data-action="back">${I.back}</button>`,
+      })}
+      <main class="view view--bible">
+        <div class="bible-reader" id="bibleReader">
+          <div class="bible-reader__loading">${I.bookOpen} Chargement du texte...</div>
+        </div>
+
+        ${queue.length > 1 ? `
+          <div class="bible-nav">
+            <button class="bible-nav__btn" ${idx === 0 ? "disabled" : ""} data-bible-nav="prev" data-day="${day}" data-i="${idx - 1}">
+              ${I.arrowLeft} <span>Précédent</span>
+            </button>
+            <span class="bible-nav__pos">${idx + 1} / ${queue.length}</span>
+            <button class="bible-nav__btn" ${idx >= queue.length - 1 ? "disabled" : ""} data-bible-nav="next" data-day="${day}" data-i="${idx + 1}">
+              <span>Suivant</span> ${I.arrowRight}
+            </button>
+          </div>
+        ` : ""}
+
+        ${!isFreeRead && idx >= queue.length - 1 && queue.length > 0 ? `
+          <div class="bible-finish">
+            ${state.progress[day]?.done
+              ? `<div class="bible-finish__done">${I.check} Lecture du jour validée.</div>`
+              : `<button class="btn" data-action="mark-today-from-bible" data-day="${day}">J'ai terminé ma lecture</button>`
+            }
+          </div>
+        ` : ""}
+      </main>
+      ${tabbar("home")}
+    </div>`;
+}
+
+function renderBibleContent(params) {
+  const container = document.getElementById("bibleReader");
+  if (!container) return;
+  const queue = bibleQueueFromParams(params);
+  if (queue.length === 0) {
+    container.innerHTML = `<p class="bible-reader__empty">Aucun passage à afficher.</p>`;
+    return;
+  }
+  const idx = Math.max(0, Math.min(queue.length - 1, parseInt(params.i, 10) || 0));
+  const item = queue[idx];
+
+  loadBible().then((bible) => {
+    const verses = getChapterVerses(bible, item.id, item.chapter);
+    if (!verses || verses.length === 0) {
+      container.innerHTML = `<p class="bible-reader__empty">Texte introuvable pour ${formatChapterLabel(item.name, item.chapter)}.</p>`;
+      return;
+    }
+    const heading = SINGLE_CHAPTER_BOOKS.has(item.name) ? item.name : `${item.name} ${item.chapter}`;
+    container.innerHTML = `
+      <h1 class="bible-reader__title">${heading}</h1>
+      <p class="bible-reader__sub">Louis Segond 1910</p>
+      <div class="bible-reader__text">
+        ${verses.map((v, i) => v ? `<p class="bv"><span class="bv__n">${i + 1}</span> <span class="bv__t">${escapeHtml(v)}</span></p>` : "").join("")}
+      </div>`;
+    window.scrollTo({ top: 0 });
+  }).catch(() => {
+    container.innerHTML = `
+      <p class="bible-reader__empty">
+        Impossible de charger le texte. Vérifie ta connexion puis réessaie.
+      </p>`;
+  });
+}
+
+// ============================================================
+// Memory verses (versets à mémoriser, planifiables)
+// ============================================================
+function todayISO() {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+function todaysMemoryVerse() {
+  const today = todayISO();
+  return (state.memoryVerses || []).find((v) => v.date === today) || null;
+}
+
+function viewMemory() {
+  const list = [...(state.memoryVerses || [])].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  const today = todayISO();
+
+  return `
+    <div class="shell">
+      ${topbar({
+        title: "Versets à mémoriser",
+        leftAction: `<button class="topbar__btn" data-action="back">${I.back}</button>`,
+      })}
+      <main class="view">
+        <div class="memory">
+          <p class="memory__intro">Ajoute autant de versets que tu veux et programme-les pour un jour précis. Le verset du jour s'affichera sur l'accueil.</p>
+
+          <div class="card memory__form">
+            <h3 class="memory__form-title">Nouveau verset</h3>
+            <div class="field">
+              <label for="memDate">Date du jour de mémorisation</label>
+              <input type="date" id="memDate" value="${today}" min="${today}"/>
+            </div>
+            <div class="field">
+              <label for="memRef">Référence</label>
+              <input type="text" id="memRef" placeholder="ex. Jean 3:16" autocomplete="off"/>
+            </div>
+            <div class="field">
+              <label for="memText">Texte du verset</label>
+              <textarea id="memText" rows="3" placeholder="Colle ou écris le verset à mémoriser..."></textarea>
+            </div>
+            <button class="btn" data-action="memory-add">${I.plus} Ajouter ce verset</button>
+          </div>
+
+          <h3 class="memory__list-title">Mes versets (${list.length})</h3>
+          ${list.length === 0 ? `
+            <div class="card memory__empty">
+              <div class="memory__empty-icon">${I.bookmark}</div>
+              <p>Aucun verset programmé pour le moment.</p>
+            </div>
+          ` : list.map((v) => {
+            const isToday = v.date === today;
+            const isPast = v.date < today;
+            return `
+              <div class="card memory-card ${isToday ? "memory-card--today" : ""} ${isPast ? "memory-card--past" : ""}">
+                <div class="memory-card__head">
+                  <span class="memory-card__date">${formatMemoryDate(v.date)} ${isToday ? "· Aujourd'hui" : ""}</span>
+                  <button class="memory-card__del" data-action="memory-del" data-id="${v.id}" aria-label="Supprimer">${I.trash}</button>
+                </div>
+                <div class="memory-card__ref">${escapeHtml(v.ref)}</div>
+                <div class="memory-card__text">${escapeHtml(v.text)}</div>
+              </div>`;
+          }).join("")}
+        </div>
+      </main>
+      ${tabbar("home")}
+    </div>`;
+}
+
+function formatMemoryDate(iso) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
+  if (!y || !m || !d) return iso;
+  const dt = new Date(y, m - 1, d);
+  return formatLongDate(dt);
+}
+
+// ============================================================
+// Settings (date de début personnalisée + thème)
+// ============================================================
+function viewSettings() {
+  const startISO = state.startedAt
+    ? new Date(state.startedAt).toISOString().slice(0, 10)
+    : todayISO();
+  const theme = state.theme || "auto";
+
+  return `
+    <div class="shell">
+      ${topbar({
+        title: "Paramètres",
+        leftAction: `<button class="topbar__btn" data-action="back">${I.back}</button>`,
+      })}
+      <main class="view">
+        <div class="settings">
+
+          <div class="card">
+            <h3 class="settings__section-title">${I.cal} Date de début</h3>
+            <p class="settings__section-sub">Synchronise ton plan de lecture avec ton groupe en choisissant la date du jour 1.</p>
+            <div class="field">
+              <label for="startDate">Jour 1 de la mission</label>
+              <input type="date" id="startDate" value="${startISO}"/>
+            </div>
+            <button class="btn" data-action="start-date-save">Enregistrer la date</button>
+          </div>
+
+          <div class="card">
+            <h3 class="settings__section-title">${I.moon} Apparence</h3>
+            <p class="settings__section-sub">Choisis l'apparence qui te convient le mieux pour la lecture.</p>
+            <div class="theme-options">
+              <button class="theme-opt ${theme === "light" ? "theme-opt--active" : ""}" data-action="theme-set" data-theme="light">
+                ${I.sun}<span>Clair</span>
+              </button>
+              <button class="theme-opt ${theme === "dark" ? "theme-opt--active" : ""}" data-action="theme-set" data-theme="dark">
+                ${I.moon}<span>Sombre</span>
+              </button>
+              <button class="theme-opt ${theme === "auto" ? "theme-opt--active" : ""}" data-action="theme-set" data-theme="auto">
+                ${I.settings}<span>Auto</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="card settings__danger">
+            <h3 class="settings__section-title">Réinitialisation</h3>
+            <p class="settings__section-sub">Efface ta progression et recommence la mission à zéro.</p>
+            <button class="btn btn--ghost" data-action="reset">Réinitialiser ma mission</button>
+          </div>
+
+        </div>
+      </main>
+      ${tabbar("help")}
+    </div>`;
+}
+
+// Petit helper de sécurité pour éviter d'injecter du HTML utilisateur.
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 // ------------------------------------------------------------
@@ -759,19 +1164,49 @@ const VIEWS = {
   reminders: viewReminders,
   completion: viewCompletion,
   globalstats: viewGlobalStats,
+  bible: viewBible,
+  memory: viewMemory,
+  settings: viewSettings,
 };
 
 function render() {
-  const route = !navigator.onLine && getRoute() !== "welcome" ? "offline" : getRoute();
+  const r = getRoute();
+  const route = !navigator.onLine && r.name !== "welcome" ? "offline" : r.name;
   const view = VIEWS[route] || viewHome;
-  document.getElementById("app").innerHTML = view();
+  document.getElementById("app").innerHTML = view(r.params || {});
   attachInstallBanner();
+  applyTheme();
   window.scrollTo({ top: 0 });
 
   // Hooks après-rendu (chargements asynchrones par vue)
   if (route === "globalstats" && supabaseEnabled) {
     fetchGlobalStats().then(renderGlobalStatsContent);
   }
+  if (route === "bible") {
+    renderBibleContent(r.params || {});
+  }
+}
+
+// ------------------------------------------------------------
+// Thème (clair / sombre / auto)
+// ------------------------------------------------------------
+function applyTheme() {
+  const t = state.theme || "auto";
+  const root = document.documentElement;
+  let effective = t;
+  if (t === "auto") {
+    effective = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark" : "light";
+  }
+  root.setAttribute("data-theme", effective);
+}
+// Re-applique le thème quand l'OS change de mode (uniquement en "auto").
+if (window.matchMedia) {
+  try {
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+      if ((state.theme || "auto") === "auto") applyTheme();
+    });
+  } catch { /* anciens navigateurs */ }
 }
 
 // ------------------------------------------------------------
@@ -781,14 +1216,30 @@ document.addEventListener("click", (e) => {
   const navEl = e.target.closest("[data-nav]");
   if (navEl) { navigate(navEl.dataset.nav); return; }
 
-  const dayEl = e.target.closest("[data-day]");
-  if (dayEl) { /* Could open day detail; for now just navigate to reading if it's today */ navigate("reading"); return; }
+  // Navigation chapitre suivant/précédent dans le lecteur Bible
+  const bnavEl = e.target.closest("[data-bible-nav]");
+  if (bnavEl && !bnavEl.disabled) {
+    const day = bnavEl.dataset.day;
+    const i = bnavEl.dataset.i;
+    navigate(`bible?day=${day}&i=${i}`);
+    return;
+  }
 
   const accEl = e.target.closest("[data-acc]");
   if (accEl && !accEl.disabled) { window.__accSelection = Number(accEl.dataset.acc); render(); return; }
 
   const actionEl = e.target.closest("[data-action]");
-  if (!actionEl) return;
+  if (actionEl) {
+    handleAction(actionEl);
+    return;
+  }
+
+  // Lignes du planning : on conserve l'ancien comportement (ouvre la lecture du jour)
+  const dayEl = e.target.closest("[data-day]");
+  if (dayEl) { navigate("reading"); return; }
+});
+
+function handleAction(actionEl) {
   const action = actionEl.dataset.action;
 
   switch (action) {
@@ -848,29 +1299,30 @@ document.addEventListener("click", (e) => {
       state.reminders.message = msg;
       saveState();
       showToast("Rappels enregistrés !");
-      if (state.reminders.enabled) {
-        if ("Notification" in window && Notification.permission === "default") {
-          Notification.requestPermission();
+      if (state.reminders.enabled && "Notification" in window) {
+        if (Notification.permission === "default") {
+          Notification.requestPermission().then(() => scheduleReminders());
+        } else {
+          scheduleReminders();
         }
+      } else {
+        clearReminderTimers();
       }
       break;
     }
     case "share-whatsapp": {
-      const txt = encodeURIComponent(`Je suis la mission #Mission31 ! Jour ${currentDay()}/31 — Je lis le Nouveau Testament tout le mois de mai. Rejoins-moi 🙏`);
+      const txt = encodeURIComponent(`Je suis la mission #Mission31 ! Jour ${currentDay()}/31. Je lis le Nouveau Testament en 31 jours. Rejoins-moi 🙏`);
       window.open(`https://wa.me/?text=${txt}`, "_blank");
       break;
     }
     case "share-native": {
-      if (navigator.share) {
-        navigator.share({
-          title: "Mission 31",
-          text: `Je suis la mission #Mission31 ! Jour ${currentDay()}/31 — Je lis le Nouveau Testament tout le mois de mai.`,
-          url: location.href,
-        }).catch(() => {});
-      } else {
-        navigator.clipboard?.writeText(`#Mission31 — Jour ${currentDay()}/31 — ${location.href}`);
-        showToast("Lien copié dans le presse-papier !");
-      }
+      shareWithImage().catch(() => {});
+      break;
+    }
+    case "retry-stats": {
+      const c = document.getElementById("gstats");
+      if (c) c.innerHTML = `<div class="gstats__loading">Chargement des statistiques...</div>`;
+      fetchGlobalStats().then(renderGlobalStatsContent);
       break;
     }
     case "reset":
@@ -890,15 +1342,100 @@ document.addEventListener("click", (e) => {
       triggerInstall();
       break;
     case "install-dismiss":
-      state.installedDismissed = true;
+      window.__installSessionDismissed = true;
+      document.querySelector(".install-banner")?.remove();
+      break;
+    case "install-progress-close": {
+      const ov = document.getElementById("install-progress");
+      if (ov) ov.remove();
+      break;
+    }
+    case "modal-close": {
+      document.querySelector(".modal")?.remove();
+      break;
+    }
+    // ------------------------------------------------------
+    // Versets à mémoriser
+    // ------------------------------------------------------
+    case "memory-add": {
+      const date = document.getElementById("memDate")?.value || todayISO();
+      const ref = (document.getElementById("memRef")?.value || "").trim();
+      const text = (document.getElementById("memText")?.value || "").trim();
+      if (!ref || !text) {
+        showToast("Référence et texte du verset requis.");
+        break;
+      }
+      state.memoryVerses.push({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        date, ref, text,
+        addedAt: new Date().toISOString(),
+      });
+      saveState();
+      showToast("Verset ajouté !");
+      render();
+      break;
+    }
+    case "memory-del": {
+      const id = actionEl.dataset.id;
+      state.memoryVerses = (state.memoryVerses || []).filter((v) => v.id !== id);
       saveState();
       render();
       break;
+    }
+    // ------------------------------------------------------
+    // Paramètres : date de début + thème
+    // ------------------------------------------------------
+    case "start-date-save": {
+      const v = document.getElementById("startDate")?.value;
+      if (!v) { showToast("Choisis une date valide."); break; }
+      const [y, m, d] = v.split("-").map((n) => parseInt(n, 10));
+      if (!y || !m || !d) { showToast("Date invalide."); break; }
+      const newStart = new Date(y, m - 1, d, 0, 0, 0).toISOString();
+      state.startedAt = newStart;
+      saveState();
+      showToast("Date de début mise à jour.");
+      navigate("home");
+      break;
+    }
+    case "theme-set": {
+      const t = actionEl.dataset.theme;
+      if (["light", "dark", "auto"].includes(t)) {
+        state.theme = t;
+        saveState();
+        applyTheme();
+        render();
+      }
+      break;
+    }
+    // ------------------------------------------------------
+    // Validation depuis le lecteur Bible
+    // ------------------------------------------------------
+    case "mark-today-from-bible": {
+      const day = parseInt(actionEl.dataset.day, 10) || currentDay();
+      // Si l'utilisateur lit le jour courant : on marque normalement.
+      // Pour un autre jour : on marque uniquement ce jour.
+      if (day === currentDay()) {
+        markRead(1);
+      } else {
+        state.progress[day] = { done: true, doneAt: new Date().toISOString(), batchSize: 1 };
+        if (!state.startedAt) state.startedAt = new Date().toISOString();
+        saveState();
+        syncProgress(completedCount());
+        showToast("Lecture validée !");
+      }
+      navigate("home");
+      break;
+    }
   }
-});
+}
 
 // ------------------------------------------------------------
-// PWA install prompt
+// PWA install prompt + barre de progression d'installation
+// L'option d'installation reste TOUJOURS accessible :
+//   - via la bannière flottante (sur toutes les pages, sauf si déjà installé
+//     ou rejetée pour la session)
+//   - via la page Aide ("Installer l'application")
+//   - via une modale d'instructions sur iOS (où il n'y a pas de prompt natif).
 // ------------------------------------------------------------
 let deferredPrompt = null;
 window.addEventListener("beforeinstallprompt", (e) => {
@@ -908,16 +1445,60 @@ window.addEventListener("beforeinstallprompt", (e) => {
 });
 
 function triggerInstall() {
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt();
-  deferredPrompt.userChoice.then(() => { deferredPrompt = null; });
+  if (deferredPrompt) {
+    showInstallProgress(0, 1, "Préparation de l'installation...");
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choice) => {
+      deferredPrompt = null;
+      if (choice && choice.outcome === "dismissed") {
+        hideInstallProgress();
+      }
+      // Sinon, le SW va envoyer ses propres événements de progression.
+    });
+    return;
+  }
+  // Pas de prompt natif disponible : on guide l'utilisateur.
+  if (isIOS()) {
+    showInstallModal({
+      title: "Installer sur iPhone / iPad",
+      steps: [
+        "Appuie sur le bouton <strong>Partager</strong> en bas de Safari (l'icône carrée avec une flèche vers le haut).",
+        "Fais défiler puis choisis <strong>« Sur l'écran d'accueil »</strong>.",
+        "Confirme avec <strong>« Ajouter »</strong> en haut à droite.",
+      ],
+      note: "L'app apparaîtra avec son icône, comme une vraie application.",
+    });
+  } else if (isAndroid()) {
+    showInstallModal({
+      title: "Installer sur Android",
+      steps: [
+        "Ouvre le <strong>menu</strong> de ton navigateur (les trois points en haut à droite).",
+        "Choisis <strong>« Installer l'application »</strong> ou <strong>« Ajouter à l'écran d'accueil »</strong>.",
+        "Confirme avec <strong>« Installer »</strong>.",
+      ],
+      note: "Si l'option n'apparaît pas, ouvre le site dans Chrome.",
+    });
+  } else {
+    showInstallModal({
+      title: "Installer l'application",
+      steps: [
+        "Ouvre le menu de ton navigateur.",
+        "Cherche <strong>« Installer Mission 31 »</strong> ou <strong>« Ajouter à l'écran d'accueil »</strong>.",
+        "Confirme l'installation.",
+      ],
+      note: "L'app fonctionnera ensuite comme une application native, même hors ligne.",
+    });
+  }
 }
 
 function attachInstallBanner() {
-  if (!deferredPrompt || state.installedDismissed) return;
+  if (isAppInstalled()) return;
+  if (window.__installSessionDismissed) return;
   if (document.querySelector(".install-banner")) return;
   const el = document.createElement("div");
   el.className = "install-banner";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", "Installer Mission 31");
   el.innerHTML = `
     <span class="install-banner__icon">${I.install}</span>
     <div class="install-banner__body">
@@ -925,19 +1506,287 @@ function attachInstallBanner() {
       <div class="install-banner__sub">Lis hors ligne, où tu veux.</div>
     </div>
     <button data-action="install">Installer</button>
-    <button class="install-banner__close" data-action="install-dismiss">${I.close}</button>
+    <button class="install-banner__close" data-action="install-dismiss" aria-label="Masquer">${I.close}</button>
   `;
   document.body.appendChild(el);
 }
 
+function showInstallModal({ title, steps, note }) {
+  document.querySelector(".modal")?.remove();
+  const el = document.createElement("div");
+  el.className = "modal";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-modal", "true");
+  el.setAttribute("aria-label", title);
+  el.innerHTML = `
+    <div class="modal__backdrop" data-action="modal-close"></div>
+    <div class="modal__card">
+      <div class="modal__icon">${I.install}</div>
+      <h3 class="modal__title">${title}</h3>
+      <ol class="modal__steps">
+        ${steps.map((s) => `<li>${s}</li>`).join("")}
+      </ol>
+      ${note ? `<p class="modal__note">${note}</p>` : ""}
+      <button class="btn" data-action="modal-close">J'ai compris</button>
+    </div>
+  `;
+  document.body.appendChild(el);
+}
+
+window.appInstalled && window.removeEventListener("appinstalled", window.appInstalled);
+window.addEventListener("appinstalled", () => {
+  showToast("Application installée !");
+  document.querySelector(".install-banner")?.remove();
+  setTimeout(hideInstallProgress, 800);
+});
+
+function showInstallProgress(done, total, label) {
+  let el = document.getElementById("install-progress");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "install-progress";
+    el.className = "install-progress";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    el.innerHTML = `
+      <div class="install-progress__card">
+        <div class="install-progress__icon">${I.bible}</div>
+        <div class="install-progress__title">Installation en cours</div>
+        <div class="install-progress__sub" id="ipsub">${label || "Préparation du mode hors ligne..."}</div>
+        <div class="install-progress__bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="ipbar"><div class="install-progress__fill" id="ipfill"></div></div>
+        <div class="install-progress__pct" id="ippct">0%</div>
+      </div>
+    `;
+    document.body.appendChild(el);
+  }
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const fill = document.getElementById("ipfill");
+  const pctEl = document.getElementById("ippct");
+  const subEl = document.getElementById("ipsub");
+  if (fill) fill.style.width = pct + "%";
+  if (pctEl) pctEl.textContent = pct + "%";
+  if (label && subEl) subEl.textContent = label;
+  const bar = document.getElementById("ipbar");
+  if (bar) bar.setAttribute("aria-valuenow", String(pct));
+}
+
+function hideInstallProgress() {
+  const el = document.getElementById("install-progress");
+  if (!el) return;
+  el.classList.add("install-progress--done");
+  setTimeout(() => el.remove(), 500);
+}
+
+// Affiche la progression au tout premier chargement (cache initial du SW),
+// uniquement si rien n'est encore en cache (vraie première visite).
+async function maybeShowFirstInstallProgress() {
+  if (!("serviceWorker" in navigator) || !("caches" in window)) return;
+  try {
+    const keys = await caches.keys();
+    const hasCache = keys.some((k) => k.startsWith("mission31"));
+    if (hasCache) return; // déjà installé, pas besoin
+    showInstallProgress(0, 1, "Préparation du mode hors ligne...");
+  } catch { /* noop */ }
+}
+
 // ------------------------------------------------------------
-// Service Worker registration
+// Rappels quotidiens (Notification API, planifié pendant que l'app est ouverte)
+// ------------------------------------------------------------
+let reminderTimers = [];
+function clearReminderTimers() {
+  reminderTimers.forEach((t) => clearTimeout(t));
+  reminderTimers = [];
+}
+
+function scheduleReminders() {
+  clearReminderTimers();
+  if (!state.reminders.enabled) return;
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  const now = new Date();
+  state.reminders.times.forEach((time) => {
+    const [h, m] = time.split(":").map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return;
+    const next = new Date(now);
+    next.setHours(h, m, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+    const delay = next - now;
+    if (delay <= 0 || delay > 24 * 3600 * 1000) return;
+    const tid = setTimeout(() => {
+      fireReminder();
+      // Replanifie pour le lendemain
+      scheduleReminders();
+    }, delay);
+    reminderTimers.push(tid);
+  });
+}
+
+function fireReminder() {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const day = currentDay();
+  // Si aujourd'hui est déjà fait, on n'ennuie pas l'utilisateur.
+  if (state.progress[day]?.done) return;
+  const passages = passagesText(day);
+  const body = `${state.reminders.message} Jour ${day}/31 · ${passages}`;
+  const opts = {
+    body,
+    icon: "./icons/icon-192.png",
+    badge: "./icons/icon-192.png",
+    tag: "mission31-daily",
+    requireInteraction: false,
+  };
+  try {
+    if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.ready.then((reg) => reg.showNotification("Mission 31", opts));
+    } else {
+      new Notification("Mission 31", opts);
+    }
+  } catch { /* ignore */ }
+}
+
+// ------------------------------------------------------------
+// Partage enrichi : génère une image canvas du share-card
+// et la transmet via la Web Share API (avec fallback texte).
+// ------------------------------------------------------------
+async function shareWithImage() {
+  const day = currentDay();
+  const text = `Je suis la mission #Mission31 ! Jour ${day}/31. Je lis le Nouveau Testament en 31 jours.`;
+  let file = null;
+  try {
+    const blob = await renderShareImage(day);
+    if (blob) file = new File([blob], `mission31-jour-${day}.png`, { type: "image/png" });
+  } catch { /* fallback text-only */ }
+
+  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        title: "Mission 31",
+        text,
+        files: [file],
+      });
+      return;
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+    }
+  }
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "Mission 31", text, url: location.href });
+      return;
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+    }
+  }
+  // Fallback ultime : copier dans le presse-papier
+  try {
+    await navigator.clipboard.writeText(`${text} ${location.href}`);
+    showToast("Lien copié dans le presse-papier !");
+  } catch {
+    showToast("Partage indisponible.");
+  }
+}
+
+function renderShareImage(day) {
+  return new Promise((resolve) => {
+    const W = 720, H = 720;
+    const canvas = document.createElement("canvas");
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return resolve(null);
+
+    // Fond dégradé teal
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, "#0a2e2e");
+    grad.addColorStop(1, "#0e3838");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Cadre intérieur
+    ctx.strokeStyle = "rgba(207, 230, 230, 0.18)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(40, 40, W - 80, H - 80);
+
+    // Icône bible (dessin vectoriel simple)
+    ctx.save();
+    ctx.translate(W / 2, 180);
+    ctx.strokeStyle = "#cfe6e6";
+    ctx.fillStyle = "#0a2e2e";
+    ctx.lineWidth = 6;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    // Livre
+    ctx.beginPath();
+    ctx.moveTo(-50, -60);
+    ctx.lineTo(60, -60);
+    ctx.lineTo(60, 60);
+    ctx.lineTo(-50, 60);
+    ctx.arcTo(-65, 60, -65, 50, 12);
+    ctx.lineTo(-65, -45);
+    ctx.arcTo(-65, -60, -50, -60, 12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Croix
+    ctx.beginPath();
+    ctx.moveTo(0, -35);
+    ctx.lineTo(0, 25);
+    ctx.moveTo(-20, -10);
+    ctx.lineTo(20, -10);
+    ctx.stroke();
+    ctx.restore();
+
+    // Titre MISSION 31
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.font = "700 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+    ctx.fillText("MISSION 31", W / 2, 320);
+
+    // Jour X / 31
+    ctx.fillStyle = "#2d8a8a";
+    ctx.font = "600 36px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+    ctx.fillText(`JOUR ${day} / 31`, W / 2, 380);
+
+    // Message
+    ctx.fillStyle = "#cfe6e6";
+    ctx.font = "400 28px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+    const lines = [
+      "Je suis la mission",
+      "et je lis le Nouveau Testament",
+      "en 31 jours.",
+    ];
+    lines.forEach((ln, i) => ctx.fillText(ln, W / 2, 460 + i * 42));
+
+    // Tag
+    ctx.fillStyle = "#f7b955";
+    ctx.font = "700 30px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+    ctx.fillText("#Mission31", W / 2, 640);
+
+    canvas.toBlob((b) => resolve(b), "image/png");
+  });
+}
+
+// ------------------------------------------------------------
+// Service Worker registration + écoute des événements de cache
 // ------------------------------------------------------------
 if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    const data = event.data || {};
+    if (data.type === "sw-cache-progress") {
+      showInstallProgress(data.done, data.total);
+    } else if (data.type === "sw-cache-done") {
+      showInstallProgress(data.total, data.total, "Installation terminée !");
+      setTimeout(hideInstallProgress, 800);
+    }
+  });
+
   window.addEventListener("load", () => {
+    maybeShowFirstInstallProgress();
     const swUrl = new URL("./sw.js", document.baseURI).href;
     navigator.serviceWorker.register(swUrl, { scope: new URL("./", document.baseURI).pathname })
-      .catch((err) => console.warn("SW registration failed:", err));
+      .catch((err) => {
+        console.warn("SW registration failed:", err);
+        hideInstallProgress();
+      });
   });
 }
 
@@ -946,3 +1795,11 @@ if ("serviceWorker" in navigator) {
 // ------------------------------------------------------------
 window.__accSelection = 1;
 render();
+attachInstallBanner(); // affiche la bannière même sans beforeinstallprompt (iOS, etc.)
+registerUser();        // compte cet appareil dans les stats globales (silencieux)
+scheduleReminders();   // planifie les notifications si déjà autorisées
+
+// Re-planifie les rappels au retour de l'app au premier plan.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") scheduleReminders();
+});

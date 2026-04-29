@@ -1,5 +1,5 @@
 /* ============================================================
-   MISSION 31 — Styles
+   MISSION 31 · Styles
    Theme: Deep teal · spiritual · calm · modern
    ============================================================ */
 
@@ -30,6 +30,29 @@
   --safe-bottom: env(safe-area-inset-bottom, 0);
   --max-w: 460px;
   --tab-h: 72px;
+}
+
+/* ------------------------------------------------------------
+   Mode sombre — palette dérivée de --bg/--primary, lisible le soir.
+   Activé par data-theme="dark" sur <html> (cf. applyTheme()).
+   ------------------------------------------------------------ */
+html[data-theme="dark"] {
+  --bg: #03191b;
+  --bg-2: #062326;
+  --bg-3: #0c2f33;
+  --surface: #0f2a2c;
+  --surface-soft: #07181a;
+  --surface-muted: #143639;
+  --ink: #e6f1f1;
+  --ink-soft: #b3c7c7;
+  --ink-faint: #80999a;
+  --line: #1d4548;
+  --line-soft: #163438;
+  --primary: #4cb3b3;
+  --primary-strong: #6ec9c9;
+  --primary-soft: #1a4044;
+  --shadow-card: 0 6px 24px rgba(0, 0, 0, 0.45);
+  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 * {
@@ -1025,7 +1048,7 @@ input, textarea, select {
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 8px; }
 
 /* ============================================================
-   GROUPE WHATSAPP — CTA réutilisable
+   GROUPE WHATSAPP · CTA réutilisable
    ============================================================ */
 .group-cta {
   display: flex;
@@ -1100,3 +1123,497 @@ input, textarea, select {
   border-radius: 4px;
   font-size: 12px;
 }
+
+/* ============================================================
+   GLOBAL STATS · HERO + EMPTY STATE
+   ============================================================ */
+.gstats__hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 18px 18px 8px;
+}
+.gstats__hero-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  background: var(--bg);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.gstats__hero-icon svg { width: 38px; height: 38px; }
+.gstats__hero-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.gstats__hero-sub {
+  font-size: 13px;
+  color: var(--ink-faint);
+  margin-top: 4px;
+  max-width: 280px;
+}
+.gstats__empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--primary-soft, var(--surface-muted));
+  color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+}
+
+/* ============================================================
+   MODAL · instructions d'installation iOS / Android / autre
+   ============================================================ */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fade-in 0.2s ease-out;
+}
+.modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 46, 46, 0.7);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.modal__card {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 26px 22px 20px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+  text-align: left;
+}
+.modal__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--bg);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.modal__icon svg { width: 28px; height: 28px; }
+.modal__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 14px;
+}
+.modal__steps {
+  margin: 0 0 14px 0;
+  padding-left: 22px;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.modal__steps li { margin-bottom: 8px; }
+.modal__steps strong { color: var(--primary); font-weight: 600; }
+.modal__note {
+  font-size: 12px;
+  color: var(--ink-faint);
+  background: var(--surface-muted);
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+
+/* ============================================================
+   INSTALL PROGRESS OVERLAY
+   ============================================================ */
+.install-progress {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 46, 46, 0.85);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  padding: 24px;
+  animation: fade-in 0.25s ease-out;
+}
+.install-progress--done { opacity: 0; transition: opacity 0.4s ease; }
+.install-progress__card {
+  width: 100%;
+  max-width: 320px;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 28px 24px 22px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+  text-align: center;
+}
+.install-progress__icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: var(--bg);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+}
+.install-progress__icon svg { width: 36px; height: 36px; }
+.install-progress__title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.install-progress__sub {
+  font-size: 13px;
+  color: var(--ink-faint);
+  margin-bottom: 18px;
+  line-height: 1.45;
+}
+.install-progress__bar {
+  width: 100%;
+  height: 8px;
+  background: var(--surface-muted);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.install-progress__fill {
+  height: 100%;
+  width: 0%;
+  background: var(--primary);
+  border-radius: 999px;
+  transition: width 0.35s ease;
+}
+.install-progress__pct {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+
+/* ============================================================
+   Bible reader (lecture du texte LSG 1910)
+   ============================================================ */
+.view--bible {
+  padding-bottom: calc(var(--tab-h) + var(--safe-bottom) + 24px);
+}
+.bible-reader {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 22px 18px 26px;
+  box-shadow: var(--shadow-card);
+  margin-bottom: 18px;
+}
+.bible-reader__title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 0 0 4px;
+  letter-spacing: -0.01em;
+}
+.bible-reader__sub {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin: 0 0 18px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+.bible-reader__loading,
+.bible-reader__empty {
+  color: var(--ink-soft);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 8px;
+}
+.bible-reader__text {
+  font-size: 17px;
+  line-height: 1.7;
+  color: var(--ink);
+  font-family: 'Georgia', 'Cambria', serif;
+}
+.bv {
+  margin: 0 0 10px;
+  text-indent: 0;
+}
+.bv__n {
+  display: inline-block;
+  min-width: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary);
+  vertical-align: super;
+  margin-right: 4px;
+  font-family: 'Inter', sans-serif;
+}
+.bv__t { color: var(--ink); }
+
+.bible-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  box-shadow: var(--shadow-soft);
+  margin-bottom: 14px;
+}
+.bible-nav__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+}
+.bible-nav__btn:hover:not(:disabled) { background: var(--surface-muted); }
+.bible-nav__btn:disabled { color: var(--ink-faint); cursor: default; opacity: 0.5; }
+.bible-nav__pos {
+  font-size: 13px;
+  color: var(--ink-faint);
+  font-weight: 600;
+}
+.bible-finish {
+  margin-top: 6px;
+}
+.bible-finish__done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ============================================================
+   Boutons "Lire le chapitre" sur la page de lecture du jour
+   ============================================================ */
+.day-card__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+.day-card__actions .btn { margin: 0; }
+
+.reading__chapters {
+  display: grid;
+  gap: 8px;
+}
+.reading__chapter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  transition: border-color 0.15s, background 0.15s;
+}
+.reading__chapter:hover {
+  border-color: var(--primary);
+  background: var(--surface-soft);
+}
+.reading__chapter-name { color: var(--ink); }
+.reading__chapter-go { color: var(--primary); display: inline-flex; }
+
+/* ============================================================
+   Versets à mémoriser
+   ============================================================ */
+.memory { display: flex; flex-direction: column; gap: 14px; }
+.memory__intro {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 4px 4px;
+}
+.memory__form-title,
+.memory__list-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 12px;
+}
+.memory__list-title { margin-top: 8px; padding: 0 4px; }
+.memory__form .field { margin-bottom: 12px; }
+.memory__empty {
+  text-align: center;
+  padding: 28px 16px;
+  color: var(--ink-faint);
+}
+.memory__empty-icon {
+  display: inline-flex;
+  color: var(--primary);
+  margin-bottom: 10px;
+  opacity: 0.6;
+}
+.memory-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border-left: 3px solid var(--line-soft);
+}
+.memory-card--today {
+  border-left-color: var(--accent);
+  background: var(--surface);
+}
+.memory-card--past { opacity: 0.65; }
+.memory-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.memory-card__date {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.memory-card--today .memory-card__date { color: var(--accent); }
+.memory-card__del {
+  background: transparent;
+  color: var(--ink-faint);
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.memory-card__del:hover { color: var(--danger); background: var(--surface-muted); }
+.memory-card__ref {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--primary);
+}
+.memory-card__text {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+  font-family: 'Georgia', serif;
+}
+
+/* Carte "verset du jour" sur l'accueil */
+.memory-today {
+  background: linear-gradient(135deg, var(--primary-soft) 0%, var(--surface) 80%);
+  border-left: 3px solid var(--accent);
+  padding: 18px;
+}
+html[data-theme="dark"] .memory-today {
+  background: linear-gradient(135deg, var(--primary-soft) 0%, var(--surface) 80%);
+}
+.memory-today__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--primary-strong);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+.memory-today__label { color: inherit; }
+.memory-today__ref {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 4px;
+}
+.memory-today__text {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink);
+  font-family: 'Georgia', serif;
+  font-style: italic;
+}
+
+/* ============================================================
+   Paramètres
+   ============================================================ */
+.settings { display: flex; flex-direction: column; gap: 14px; }
+.settings__section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+.settings__section-title svg { color: var(--primary); }
+.settings__section-sub {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+.settings__danger { border: 1px dashed var(--line); }
+.theme-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.theme-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 8px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  transition: all 0.15s;
+}
+.theme-opt svg { color: var(--ink-soft); }
+.theme-opt:hover { border-color: var(--primary); }
+.theme-opt--active {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-strong);
+}
+.theme-opt--active svg { color: var(--primary-strong); }
+
+/* Mode sombre — petits ajustements supplémentaires */
+html[data-theme="dark"] body { background: var(--surface-soft); color: var(--ink); }
+html[data-theme="dark"] .topbar,
+html[data-theme="dark"] .tabbar { background: var(--surface); border-color: var(--line); }
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html[data-theme="dark"] .reading__chapter { background: var(--surface); }
+html[data-theme="dark"] .reading__chapter:hover { background: var(--surface-muted); }

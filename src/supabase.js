@@ -1,5 +1,5 @@
 // ============================================================
-// Mission 31 — Client Supabase (stats globales anonymes)
+// Mission 31 : Client Supabase (stats globales anonymes)
 // ============================================================
 // Variables d'environnement Vite (préfixe VITE_ obligatoire) :
 //   VITE_SUPABASE_URL       = https://xxxxx.supabase.co
@@ -33,6 +33,41 @@ export function clientId() {
   return id;
 }
 
+// Enregistre l'utilisateur dès le premier lancement de l'app
+// (ne touche pas à completed_count s'il existe déjà).
+const REG_KEY = "mission31:registered:v1";
+export async function registerUser() {
+  if (!supabase) return;
+  if (localStorage.getItem(REG_KEY) === "1") {
+    // Déjà enregistré : on met juste à jour last_active.
+    try {
+      await supabase
+        .from("mission31_users")
+        .update({ last_active: new Date().toISOString() })
+        .eq("client_id", clientId());
+    } catch (err) {
+      console.warn("Supabase touch failed:", err);
+    }
+    return;
+  }
+  try {
+    const { error } = await supabase
+      .from("mission31_users")
+      .upsert(
+        {
+          client_id: clientId(),
+          last_active: new Date().toISOString(),
+          completed_count: 0,
+        },
+        { onConflict: "client_id", ignoreDuplicates: true },
+      );
+    if (!error) localStorage.setItem(REG_KEY, "1");
+    else console.warn("Supabase register failed:", error);
+  } catch (err) {
+    console.warn("Supabase register failed:", err);
+  }
+}
+
 // Upsert progression (appelé après chaque validation de lecture).
 export async function syncProgress(completedCount) {
   if (!supabase) return;
@@ -46,12 +81,14 @@ export async function syncProgress(completedCount) {
     await supabase
       .from("mission31_users")
       .upsert(payload, { onConflict: "client_id" });
+    localStorage.setItem(REG_KEY, "1");
   } catch (err) {
     console.warn("Supabase sync failed:", err);
   }
 }
 
 // Récupère les stats globales agrégées (RPC côté serveur).
+// Retourne { total_users, completed_missions, completion_rate } ou null.
 export async function fetchGlobalStats() {
   if (!supabase) return null;
   try {
