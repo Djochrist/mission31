@@ -1,0 +1,33 @@
+{
+  "name": "Mission 31 — Le Nouveau Testament en 31 jours",
+  "short_name": "Mission 31",
+  "description": "Lis le Nouveau Testament de la Bible en 31 jours. Plan de lecture, statistiques, badges, rappels et mode hors ligne.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a2e2e",
+  "theme_color": "#0a2e2e",
+  "lang": "fr",
+  "categories": ["lifestyle", "education", "books"],
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
