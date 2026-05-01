@@ -728,7 +728,7 @@ function viewAccelerated() {
   return `
     <div class="shell">
       ${topbar({
-        title: "Lecture accélérée",
+        title: "Validation par lot",
         leftAction: `<button class="topbar__btn" data-action="back">${I.back}</button>`,
       })}
       <main class="view">
@@ -961,7 +961,7 @@ function viewHelp() {
     { icon: I.bookmark,  title: "Versets à mémoriser", sub: "Programme et révise tes versets", nav: "memory", accent: true },
     { icon: I.fileText,  title: "Mes notes", sub: `${(state.notes || []).length} note${(state.notes || []).length !== 1 ? "s" : ""} enregistrée${(state.notes || []).length !== 1 ? "s" : ""}`, nav: "notes", accent: true },
     { icon: I.settings,  title: "Paramètres", sub: "Date de début, mode sombre, rappels, contact", nav: "settings" },
-    { icon: I.question,  title: "Comment fonctionne Mission 31 ?", sub: "Guide complet, lectures accélérées, rappels…", nav: "how" },
+    { icon: I.question,  title: "Comment fonctionne Mission 31 ?", sub: "Guide complet, navigation par jour, rappels…", nav: "how" },
     { icon: I.bellSmall, title: "Notifications & rappels", nav: "reminders" },
     !installed && {
       icon: I.install,
@@ -1585,30 +1585,31 @@ function viewHow() {
             <div class="how-tip">💡 Tu peux aussi valider ta lecture depuis l'accueil sans passer par le lecteur intégré.</div>
           </div>
 
-          <!-- Lectures accélérées -->
+          <!-- Lecture du jour suivant -->
           <div class="how-section">
             <div class="how-section__header">
               <div class="how-section__icon">${I.bolt}</div>
-              <h3 class="how-section__title">Lectures accélérées</h3>
+              <h3 class="how-section__title">Lecture du jour suivant</h3>
             </div>
             <p class="how-section__body" style="margin-bottom:10px;">
-              Tu as plus de temps un jour donné, ou tu veux rattraper un retard ? La <strong>lecture accélérée</strong> te permet de valider plusieurs jours de lecture en une seule fois.
+              Après avoir validé un jour, tu peux continuer sur le jour suivant directement depuis l'accueil.
+              Le bouton <strong>Lire le jour suivant</strong> reste disponible tant que des jours sont ouverts.
             </p>
             <ul class="how-steps">
               <li class="how-step">
                 <span class="how-step__num">1</span>
-                <span class="how-step__text">Depuis l'accueil, appuie sur <strong>"Lecture accélérée"</strong>.</span>
+                <span class="how-step__text">Valide ta lecture du jour courant.</span>
               </li>
               <li class="how-step">
                 <span class="how-step__num">2</span>
-                <span class="how-step__text">Choisis parmi les options : <strong>1, 2, 3, 5, 10 ou 15 jours</strong>.</span>
+                <span class="how-step__text">Le jour suivant devient disponible automatiquement.</span>
               </li>
               <li class="how-step">
                 <span class="how-step__num">3</span>
-                <span class="how-step__text">Lis les passages correspondants et confirme que tu as bien lu ces jours.</span>
+                <span class="how-step__text">Tu peux ensuite lire Jour 3, Jour 4, etc., jusqu'à la fin de la mission.</span>
               </li>
             </ul>
-            <div class="how-tip">⚡ La lecture accélérée valide les jours sélectionnés avec un toast de confirmation.</div>
+            <div class="how-tip">➡️ La navigation se met à jour jour après jour : tu peux avancer autant que nécessaire.</div>
           </div>
 
           <!-- Versets à mémoriser -->
