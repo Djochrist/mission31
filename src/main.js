@@ -433,7 +433,7 @@ function markRead(daysCount = 1) {
 // ------------------------------------------------------------
 const routes = [
   "welcome", "home", "reading", "accelerated", "planning", "stats", "rewards",
-  "share", "help", "offline", "reminders", "completion", "globalstats",
+  "share", "help", "offline", "reminders", "completion",
   "bible", "memory", "settings", "notes", "how",
 ];
 
@@ -909,10 +909,19 @@ function viewStats() {
             </div>
           </div>
 
+          <div class="visitor-counter" aria-live="polite">
+            <div class="visitor-counter__icon">${I.users}</div>
+            <div>
+              <div class="visitor-counter__label">Visiteurs du site</div>
+              <div class="visitor-counter__value" id="visitor-count">
+                ${supabaseEnabled ? "..." : "Indisponible"}
+              </div>
+            </div>
+          </div>
+
           <p class="encourage">Il te reste ${31 - completedCount()} jours pour finir la mission.<br/>Continue, tu y es presque !</p>
 
           <div class="stats-actions">
-            <button class="btn btn--ghost" data-nav="globalstats">Voir les stats globales</button>
             <button class="btn btn--danger" data-action="reset">
               Réinitialiser la mission
             </button>
@@ -1194,84 +1203,15 @@ function viewCompletion() {
     </div>`;
 }
 
-function viewGlobalStats() {
-  // Données réelles depuis Supabase (chargement asynchrone après render).
-  // Tant que les données ne sont pas reçues, on affiche un état de chargement.
-  return `
-    <div class="shell">
-      ${topbar({
-        title: "Stats globales",
-        leftAction: `<button class="topbar__btn" data-action="back">${I.back}</button>`,
-      })}
-      <main class="view">
-        <div class="gstats__hero">
-          <div class="gstats__hero-icon">${I.bible}</div>
-          <div class="gstats__hero-title">Mission 31</div>
-          <div class="gstats__hero-sub">Combien sommes-nous à lire le Nouveau Testament ?</div>
-        </div>
-
-        <div class="gstats" id="gstats" aria-live="polite">
-          ${!supabaseEnabled ? `
-            <div class="gstats__empty">
-              <div class="gstats__empty-icon">${I.bibleSmall}</div>
-              <p><strong>Stats globales indisponibles.</strong></p>
-              <p>La connexion à Supabase n'est pas configurée ici. Vérifie les variables d'environnement <code>VITE_SUPABASE_URL</code> et <code>VITE_SUPABASE_ANON_KEY</code>.</p>
-            </div>
-          ` : `
-            <div class="gstats__loading">Chargement des statistiques...</div>
-          `}
-        </div>
-
-        <a class="group-cta" href="${WHATSAPP_GROUP_URL}" target="_blank" rel="noopener noreferrer" style="margin-top:20px;">
-          ${I.whatsapp}
-          <span class="group-cta__text">Rejoins la communauté <em>Mission 31</em></span>
-          <span class="group-cta__arrow">→</span>
-        </a>
-      </main>
-      ${tabbar("stats")}
-    </div>`;
-}
-
-function renderGlobalStatsContent(data) {
-  const container = document.getElementById("gstats");
-  if (!container) return;
+function renderVisitorCount(data) {
+  const counter = document.getElementById("visitor-count");
+  if (!counter) return;
   if (!data) {
-    container.innerHTML = `
-      <div class="gstats__empty">
-        <div class="gstats__empty-icon">${I.bibleSmall}</div>
-        <p><strong>Données indisponibles.</strong></p>
-        <p>Impossible de récupérer les statistiques pour le moment. Vérifie ta connexion et réessaie plus tard.</p>
-        <button class="btn btn--ghost" data-action="retry-stats" style="margin-top:12px;">Réessayer</button>
-      </div>`;
+    counter.textContent = "Indisponible";
     return;
   }
   const total_users = Number(data.total_users || 0);
-  const completed_missions = Number(data.completed_missions || 0);
-  const completion_rate = Number(data.completion_rate || 0);
-  container.innerHTML = `
-    <div class="gstat">
-      <div class="gstat__icon">${I.users}</div>
-      <div>
-        <div class="gstat__value">${total_users.toLocaleString("fr-FR")}</div>
-        <div class="gstat__label">${total_users <= 1 ? "Utilisateur" : "Utilisateurs"}</div>
-      </div>
-    </div>
-    <div class="gstat">
-      <div class="gstat__icon">${I.checkBig.replace('width="42"', 'width="20"').replace('height="42"', 'height="20"')}</div>
-      <div>
-        <div class="gstat__value">${completed_missions.toLocaleString("fr-FR")}</div>
-        <div class="gstat__label">${completed_missions <= 1 ? "Mission terminée" : "Missions terminées"}</div>
-      </div>
-    </div>
-    <div class="gstat">
-      <div class="gstat__icon">${I.tabStats}</div>
-      <div>
-        <div class="gstat__value">${completion_rate}%</div>
-        <div class="gstat__label">Taux de complétion</div>
-      </div>
-    </div>
-    <p class="gstat__caption">Données réelles synchronisées depuis la base anonyme.</p>
-  `;
+  counter.textContent = total_users.toLocaleString("fr-FR");
 }
 
 // ============================================================
@@ -1848,7 +1788,6 @@ const VIEWS = {
   offline: viewOffline,
   reminders: viewReminders,
   completion: viewCompletion,
-  globalstats: viewGlobalStats,
   bible: viewBible,
   memory: viewMemory,
   settings: viewSettings,
@@ -1866,8 +1805,8 @@ function render() {
   window.scrollTo({ top: 0 });
 
   // Hooks après-rendu (chargements asynchrones par vue)
-  if (route === "globalstats" && supabaseEnabled) {
-    fetchGlobalStats().then(renderGlobalStatsContent);
+  if (route === "stats" && supabaseEnabled) {
+    fetchGlobalStats().then(renderVisitorCount);
   }
   if (route === "bible") {
     renderBibleContent(r.params || {});
@@ -2109,12 +2048,6 @@ function handleAction(actionEl) {
     }
     case "share-native": {
       shareWithImage().catch(() => {});
-      break;
-    }
-    case "retry-stats": {
-      const c = document.getElementById("gstats");
-      if (c) c.innerHTML = `<div class="gstats__loading">Chargement des statistiques...</div>`;
-      fetchGlobalStats().then(renderGlobalStatsContent);
       break;
     }
     case "reset":
@@ -2736,7 +2669,7 @@ if ("serviceWorker" in navigator) {
 window.__accSelection = 1;
 render();
 attachInstallBanner(); // affiche la bannière même sans beforeinstallprompt (iOS, etc.)
-registerUser();        // compte cet appareil dans les stats globales (silencieux)
+registerUser();        // compte cet appareil dans le compteur visiteurs (silencieux)
 scheduleReminders();   // planifie les notifications si déjà autorisées
 
 // Demande la permission de notification après 5 s si reminders.enabled

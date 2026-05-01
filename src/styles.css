@@ -630,6 +630,43 @@ html[data-theme="dark"] .notif-banner--err  { background: rgba(139,26,26,0.15); 
   gap: 6px;
 }
 
+.visitor-counter {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--bg);
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-card);
+}
+.visitor-counter__icon {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--accent);
+}
+.visitor-counter__icon svg {
+  width: 22px;
+  height: 22px;
+}
+.visitor-counter__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.72);
+}
+.visitor-counter__value {
+  margin-top: 2px;
+  font-size: 28px;
+  line-height: 1.1;
+  font-weight: 800;
+}
+
 .encourage {
   text-align: center;
   font-size: 13px;
@@ -955,40 +992,6 @@ html[data-theme="dark"] .notif-banner--err  { background: rgba(139,26,26,0.15); 
 .completion__stats .stat-tile { text-align: center; }
 
 /* ============================================================
-   GLOBAL STATS
-   ============================================================ */
-.gstats { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
-.gstat {
-  background: var(--surface);
-  border-radius: var(--radius);
-  padding: 18px 18px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  box-shadow: var(--shadow-soft);
-}
-.gstat__icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: var(--primary-soft);
-  color: var(--primary-strong);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.gstat__value { font-size: 20px; font-weight: 700; }
-.gstat__label { font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
-.gstat__caption {
-  text-align: center;
-  font-size: 12px;
-  color: var(--ink-faint);
-  margin-top: 8px;
-  padding: 0 12px;
-  line-height: 1.55;
-}
-
-/* ============================================================
    READING (today's reading view)
    ============================================================ */
 .reading {
@@ -1174,71 +1177,6 @@ html[data-theme="dark"] .notif-banner--err  { background: rgba(139,26,26,0.15); 
 }
 .help-row--accent .help-row__icon { color: #128c7e; }
 .help-row { text-decoration: none; }
-
-/* États de la vue stats globales */
-.gstats__loading,
-.gstats__empty {
-  background: var(--surface);
-  border-radius: 16px;
-  padding: 24px 18px;
-  text-align: center;
-  color: var(--ink-faint);
-  font-size: 14px;
-  line-height: 1.55;
-}
-.gstats__empty strong { color: var(--ink); }
-.gstats__empty code {
-  background: rgba(45, 138, 138, 0.1);
-  color: var(--primary);
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-/* ============================================================
-   GLOBAL STATS · HERO + EMPTY STATE
-   ============================================================ */
-.gstats__hero {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 18px 18px 8px;
-}
-.gstats__hero-icon {
-  width: 72px;
-  height: 72px;
-  border-radius: 20px;
-  background: var(--bg);
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 12px;
-}
-.gstats__hero-icon svg { width: 38px; height: 38px; }
-.gstats__hero-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.gstats__hero-sub {
-  font-size: 13px;
-  color: var(--ink-faint);
-  margin-top: 4px;
-  max-width: 280px;
-}
-.gstats__empty-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  background: var(--primary-soft, var(--surface-muted));
-  color: var(--primary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 12px;
-}
 
 /* ============================================================
    MODAL · instructions d'installation iOS / Android / autre
@@ -1703,25 +1641,20 @@ html[data-theme="dark"] .reading__chapter:hover { background: var(--surface-mute
 }
 .splash__app-icon {
   width: 140px;
-  height: 118px;        /* clips ~16% from bottom, hiding the baked-in M31 */
-  border-radius: 28px 28px 0 0;
+  height: 140px;
+  border-radius: 28px;
   object-fit: cover;
-  object-position: top center;
   filter: drop-shadow(0 8px 24px rgba(0,0,0,0.45));
   display: block;
 }
 .splash__m31 {
-  width: 140px;
-  background: #0a2e2e;  /* matches icon background colour */
-  border-radius: 0 0 28px 28px;
-  padding: 4px 0 10px;
+  margin-top: 12px;
   text-align: center;
   font-family: 'Space Grotesk', sans-serif;
   font-size: 13px;
   font-weight: 300;
   letter-spacing: 0.25em;
   color: rgba(255,255,255,0.75);
-  filter: drop-shadow(0 8px 24px rgba(0,0,0,0.45));
 }
 
 /* ============================================================

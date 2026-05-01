@@ -100,6 +100,7 @@ Vue d'ensemble des **31 jours**.
 - Progression globale (%, jours validés / 31)
 - Streak actuel et plus longue série
 - Jours gagnés (avance sur le rythme prévu)
+- Compteur persistant des visiteurs du site (si Supabase est configuré)
 - Date estimée de fin
 
 ---
@@ -188,17 +189,6 @@ Affiché quand l'utilisateur a validé les 31 jours.
 **Différence « Nouvelle lancée » vs « Réinitialiser » :**
 - **Nouvelle lancée** : conserve `completionCount` et `reReads`, remet uniquement `progress` et `startedAt` à zéro. L'utilisateur repart pour un nouveau tour.
 - **Réinitialiser** (dans les paramètres) : efface **tout**, y compris l'historique des tours.
-
----
-
-### 2.12. Écran Statistiques globales (`globalstats`)
-
-**Contenu (si Supabase configuré) :**
-- Nombre total de participants, missions terminées, taux de complétion
-
-**Si Supabase non configuré :** affiche « Stats globales indisponibles ».
-
-Chaque utilisateur est anonyme — seul un UUID aléatoire et le nombre de jours validés sont envoyés.
 
 ---
 

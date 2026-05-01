@@ -1,5 +1,5 @@
 // ============================================================
-// Mission 31 : Client Supabase (stats globales anonymes)
+// Mission 31 : Client Supabase (visiteurs et progression anonymes)
 // ============================================================
 // Variables d'environnement Vite (préfixe VITE_ obligatoire) :
 //   VITE_SUPABASE_URL       = https://xxxxx.supabase.co
@@ -87,7 +87,7 @@ export async function syncProgress(completedCount) {
   }
 }
 
-// Récupère les stats globales agrégées (RPC côté serveur).
+// Récupère les stats agrégées (RPC côté serveur).
 // Retourne { total_users, completed_missions, completion_rate } ou null.
 export async function fetchGlobalStats() {
   if (!supabase) return null;

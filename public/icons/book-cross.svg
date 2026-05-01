@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Bible avec une croix">
+  <defs>
+    <linearGradient id="bg" x1="96" y1="52" x2="418" y2="474" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#144545"/>
+      <stop offset="0.58" stop-color="#0a2e2e"/>
+      <stop offset="1" stop-color="#03191b"/>
+    </linearGradient>
+    <linearGradient id="cover" x1="142" y1="116" x2="389" y2="395" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#eef1f2"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="149" y1="104" x2="236" y2="397" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffd884"/>
+      <stop offset="1" stop-color="#f7b955"/>
+    </linearGradient>
+    <filter id="shadow" x="88" y="82" width="340" height="356" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="17" flood-color="#03191b" flood-opacity="0.38"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="118" fill="url(#bg)"/>
+  <circle cx="393" cy="108" r="9" fill="#f7b955" opacity="0.72"/>
+  <circle cx="102" cy="381" r="6" fill="#4cb3b3" opacity="0.55"/>
+
+  <g filter="url(#shadow)">
+    <path d="M138 118h237c22 0 40 18 40 40v203c0 22-18 40-40 40H138c-22 0-40-18-40-40V158c0-22 18-40 40-40Z" fill="#073537"/>
+    <path d="M153 104h225c21 0 38 17 38 38v204c0 21-17 38-38 38H153c-21 0-38-17-38-38V142c0-21 17-38 38-38Z" fill="url(#cover)"/>
+    <path d="M153 104h73v280h-73c-21 0-38-17-38-38V142c0-21 17-38 38-38Z" fill="url(#gold)"/>
+    <path d="M226 105v279" stroke="#0a2e2e" stroke-width="8" stroke-opacity="0.16"/>
+    <path d="M145 145c0-7 6-13 13-13h218c7 0 13 6 13 13v177c0 7-6 13-13 13H158c-7 0-13-6-13-13V145Z" fill="#ffffff" opacity="0.38"/>
+    <path d="M180 175h122M180 216h76M180 294h122" stroke="#0a2e2e" stroke-width="13" stroke-linecap="round" opacity="0.18"/>
+    <path d="M296 154h46v58h58v45h-58v96h-46v-96h-58v-45h58v-58Z" fill="#0a2e2e"/>
+    <path d="M298 155h43v56h56v42h-56v97h-43v-97h-57v-42h57v-56Z" fill="#0a2e2e"/>
+    <path d="M153 384h225c16 0 30-10 36-24H150c-17 0-31-14-31-31v17c0 21 15 38 34 38Z" fill="#d8e0e1"/>
+    <path d="M156 361h236" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="0.72"/>
+  </g>
+</svg>
