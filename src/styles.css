@@ -711,6 +711,12 @@ html[data-theme="dark"] .notif-banner--err  { background: rgba(139,26,26,0.15); 
   line-height: 1.1;
   font-weight: 800;
 }
+.visitor-counter__value--muted {
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 500;
+  color: rgba(255,255,255,0.78);
+}
 .visitor-counter__caption {
   margin-top: 4px;
   font-size: 11px;

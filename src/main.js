@@ -965,7 +965,7 @@ function viewStats() {
   const installedUsers = hasInstalledUsers
     ? Math.max(Number(globalStats.installed_users), isAppInstalled() ? 1 : 0)
     : null;
-  const unavailableLabel = "Données indisponibles";
+  const unavailableLabel = "Pas encore disponible";
   const loadingLabel = "...";
   const globalVisitorsLabel = hasGlobalVisitors
     ? globalVisitors.toLocaleString("fr-FR")
@@ -973,7 +973,11 @@ function viewStats() {
   const installedUsersLabel = hasInstalledUsers
     ? installedUsers.toLocaleString("fr-FR")
     : globalStatsUnavailable ? unavailableLabel : loadingLabel;
-  const globalCaption = globalStatsUnavailable ? unavailableLabel : "";
+  const globalVisitorsValueClass = hasGlobalVisitors ? "" : " visitor-counter__value--muted";
+  const installedUsersValueClass = hasInstalledUsers ? "" : " visitor-counter__value--muted";
+  const globalCaption = globalStatsUnavailable
+    ? "Les chiffres de la communauté ne sont pas accessibles pour le moment."
+    : "Tu n'avances pas seul : d'autres lecteurs continuent la mission avec toi.";
   return `
     <div class="shell">
       ${topbar({ title: "Stats" })}
@@ -1047,12 +1051,12 @@ function viewStats() {
             <div class="visitor-counter__body">
               <div class="visitor-counter__grid">
                 <div>
-                  <div class="visitor-counter__label">Personnes au courant</div>
-                  <div class="visitor-counter__value">${globalVisitorsLabel}</div>
+                  <div class="visitor-counter__label">Vous lisez avec nous</div>
+                  <div class="visitor-counter__value${globalVisitorsValueClass}">${globalVisitorsLabel}</div>
                 </div>
                 <div>
-                  <div class="visitor-counter__label">Participants installés</div>
-                  <div class="visitor-counter__value">${installedUsersLabel}</div>
+                  <div class="visitor-counter__label">Vous avez ajouté l'app</div>
+                  <div class="visitor-counter__value${installedUsersValueClass}">${installedUsersLabel}</div>
                 </div>
               </div>
               ${globalCaption ? `<div class="visitor-counter__caption">${globalCaption}</div>` : ""}
