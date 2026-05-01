@@ -1071,7 +1071,7 @@ function viewRewards() {
               const isUnlocked = completionCount >= b.required;
               return `
                 <div class="badge ${isUnlocked ? "" : "badge--locked"}">
-                  <div class="badge__icon">${b.icon}</div>
+                  <div class="badge__icon badge__icon--emoji">${escapeHtml(b.emoji)}</div>
                   <div class="badge__name">${escapeHtml(b.name)}</div>
                   <div class="badge__desc">${escapeHtml(b.desc)}</div>
                 </div>`;
@@ -1080,7 +1080,7 @@ function viewRewards() {
 
           ${completionCount > 0 ? `
             <div class="card" style="margin-top:16px;text-align:center;padding:14px;">
-              <div style="display:flex;justify-content:center;margin-bottom:6px;color:var(--primary);">${TOUR_BADGES[0].icon}</div>
+              <div class="tour-count-emoji">${escapeHtml(TOUR_BADGES[0].emoji)}</div>
               <div style="font-weight:700;color:var(--primary);">${completionCount} tour${completionCount > 1 ? "s" : ""} accompli${completionCount > 1 ? "s" : ""}</div>
               <div style="font-size:13px;color:var(--ink-faint);margin-top:4px;">Tu continues à creuser la Parole.</div>
             </div>
@@ -1298,7 +1298,7 @@ function viewCompletion() {
               <div class="tour-badge-row">
                 ${earnedTourBadges.map((b) => `
                   <div class="tour-badge">
-                    <span class="tour-badge__icon">${b.icon}</span>
+                    <span class="tour-badge__emoji">${escapeHtml(b.emoji)}</span>
                     <span class="tour-badge__name">${escapeHtml(b.name)}</span>
                     <span class="tour-badge__desc">${escapeHtml(b.desc)}</span>
                   </div>
