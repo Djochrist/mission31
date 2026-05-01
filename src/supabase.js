@@ -13,17 +13,32 @@
 
 import { createClient } from "@supabase/supabase-js";
 
-const URL =
-  import.meta.env.VITE_SUPABASE_URL ||
-  import.meta.env.NEXT_PUBLIC_SUPABASE_URL;
+function cleanEnv(value) {
+  return String(value || "").trim().replace(/^['"]|['"]$/g, "");
+}
 
-const KEY =
+function isValidSupabaseUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname.endsWith(".supabase.co");
+  } catch {
+    return false;
+  }
+}
+
+const URL = cleanEnv(
+  import.meta.env.VITE_SUPABASE_URL ||
+  import.meta.env.NEXT_PUBLIC_SUPABASE_URL
+);
+
+const KEY = cleanEnv(
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+);
 
-export const supabaseEnabled = Boolean(URL && KEY);
+export const supabaseEnabled = Boolean(URL && KEY && isValidSupabaseUrl(URL));
 
 export const supabase = supabaseEnabled
   ? createClient(URL, KEY, {

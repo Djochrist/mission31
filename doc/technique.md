@@ -430,6 +430,10 @@ Si vides → toute la logique Supabase est désactivée silencieusement.
 
 ### 8.3. Schéma SQL
 
+Les stats globales affichées dans l'app correspondent à :
+- `total_users` : nombre d'appareils/visiteurs anonymes enregistrés dans `mission31_users`.
+- `installed_users` : nombre d'appareils marqués `installed=true` après acceptation du prompt PWA ou ouverture en mode installé.
+
 ```sql
 create table mission31_users (
   client_id uuid primary key,

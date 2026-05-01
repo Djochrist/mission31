@@ -961,14 +961,14 @@ function viewStats() {
   const offset = C - (pct / 100) * C;
   const hasGlobalVisitors = Number.isFinite(Number(globalStats?.total_users));
   const hasInstalledUsers = Number.isFinite(Number(globalStats?.installed_users));
-  const globalVisitors = hasGlobalVisitors ? Number(globalStats.total_users) : null;
+  const visitorCount = hasGlobalVisitors ? Number(globalStats.total_users) : null;
   const installedUsers = hasInstalledUsers
     ? Number(globalStats.installed_users)
     : null;
   const unavailableLabel = "Pas encore disponible";
   const loadingLabel = "...";
   const globalVisitorsLabel = hasGlobalVisitors
-    ? globalVisitors.toLocaleString("fr-FR")
+    ? visitorCount.toLocaleString("fr-FR")
     : globalStatsUnavailable ? unavailableLabel : loadingLabel;
   const installedUsersLabel = hasInstalledUsers
     ? installedUsers.toLocaleString("fr-FR")
@@ -977,7 +977,7 @@ function viewStats() {
   const installedUsersValueClass = hasInstalledUsers ? "" : " visitor-counter__value--muted";
   const globalCaption = globalStatsUnavailable
     ? "Les chiffres de la communauté ne sont pas accessibles pour le moment."
-    : "Tu n'avances pas seul : d'autres lecteurs continuent la mission avec toi.";
+    : "Ces compteurs viennent de Supabase et se mettent à jour pour tous les visiteurs.";
   return `
     <div class="shell">
       ${topbar({ title: "Stats" })}
@@ -1005,14 +1005,6 @@ function viewStats() {
             <div class="stat-tile">
               <div class="stat-tile__label">Streak actuel ${I.flame}</div>
               <div class="stat-tile__value">${streakCount()} jours</div>
-            </div>
-            <div class="stat-tile">
-              <div class="stat-tile__label">Doubles lectures</div>
-              <div class="stat-tile__value">${doubleCount()}</div>
-            </div>
-            <div class="stat-tile">
-              <div class="stat-tile__label">Triples lectures</div>
-              <div class="stat-tile__value">${tripleCount()}</div>
             </div>
             <div class="stat-tile">
               <div class="stat-tile__label">Plus longue série</div>
@@ -1051,11 +1043,11 @@ function viewStats() {
             <div class="visitor-counter__body">
               <div class="visitor-counter__grid">
                 <div>
-                  <div class="visitor-counter__label">Vous lisez avec nous</div>
+                  <div class="visitor-counter__label">Visiteurs du site</div>
                   <div class="visitor-counter__value${globalVisitorsValueClass}">${globalVisitorsLabel}</div>
                 </div>
                 <div>
-                  <div class="visitor-counter__label">Vous avez ajouté l'app</div>
+                  <div class="visitor-counter__label">Installations de l'app</div>
                   <div class="visitor-counter__value${installedUsersValueClass}">${installedUsersLabel}</div>
                 </div>
               </div>
@@ -2425,11 +2417,14 @@ window.addEventListener("beforeinstallprompt", (e) => {
 function triggerInstall() {
   if (deferredPrompt) {
     deferredPrompt.prompt();
-    deferredPrompt.userChoice.then((choice) => {
+    deferredPrompt.userChoice.then(async (choice) => {
       deferredPrompt = null;
       if (choice && choice.outcome === "accepted") {
         installMode = "install";
         showInstallProgress(0, 1, "Installation en cours...");
+        await markInstalled();
+        globalStatsLoadedAt = 0;
+        refreshGlobalStats();
       } else {
         hideInstallProgress();
       }
