@@ -2340,6 +2340,7 @@ function handleAction(actionEl) {
 //   - via une modale d'instructions sur iOS (où il n'y a pas de prompt natif).
 // ------------------------------------------------------------
 let deferredPrompt = null;
+let installMode = "install";
 window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
   deferredPrompt = e;
@@ -2348,14 +2349,16 @@ window.addEventListener("beforeinstallprompt", (e) => {
 
 function triggerInstall() {
   if (deferredPrompt) {
-    showInstallProgress(0, 1, "Préparation de l'installation...");
     deferredPrompt.prompt();
     deferredPrompt.userChoice.then((choice) => {
       deferredPrompt = null;
-      if (choice && choice.outcome === "dismissed") {
+      if (choice && choice.outcome === "accepted") {
+        installMode = "install";
+        showInstallProgress(0, 1, "Installation en cours...");
+      } else {
         hideInstallProgress();
       }
-      // Sinon, le SW va envoyer ses propres événements de progression.
+      // Si accepté, le SW va envoyer ses propres événements de progression.
     });
     return;
   }
@@ -2467,7 +2470,8 @@ function showNoteModal(day, chapterRef) {
 
 window.appInstalled && window.removeEventListener("appinstalled", window.appInstalled);
 window.addEventListener("appinstalled", () => {
-  showToast("Application installée !");
+  const message = installMode === "update" ? "Application mise à jour !" : "Application installée !";
+  showToast(message);
   document.querySelector(".install-banner")?.remove();
   setTimeout(hideInstallProgress, 800);
 });
@@ -2516,7 +2520,8 @@ async function maybeShowFirstInstallProgress() {
   try {
     const keys = await caches.keys();
     const hasCache = keys.some((k) => k.startsWith("mission31"));
-    if (hasCache) return; // déjà installé, pas besoin
+    installMode = hasCache ? "update" : "install";
+    if (hasCache) return; // déjà installé ou déjà visité, pas besoin d'une installation initiale
     showInstallProgress(0, 1, "Préparation du mode hors ligne...");
   } catch { /* noop */ }
 }
@@ -2704,9 +2709,11 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("message", (event) => {
     const data = event.data || {};
     if (data.type === "sw-cache-progress") {
-      showInstallProgress(data.done, data.total);
+      const label = installMode === "update" ? "Mise à jour en cours..." : "Installation en cours...";
+      showInstallProgress(data.done, data.total, label);
     } else if (data.type === "sw-cache-done") {
-      showInstallProgress(data.total, data.total, "Installation terminée !");
+      const label = installMode === "update" ? "Mise à jour terminée !" : "Installation terminée !";
+      showInstallProgress(data.total, data.total, label);
       setTimeout(hideInstallProgress, 800);
     }
   });
