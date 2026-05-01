@@ -266,13 +266,16 @@ function playChime() {
 // isReRead   : true si c'est une relecture
 // reReadCount: nombre de relectures déjà faites pour ce jour
 // ------------------------------------------------------------
-function showCelebration(day, isReRead = false, reReadCount = 0) {
+function showCelebration(day, isReRead = false, reReadCount = 0, unlockedBadge = null) {
   playChime();
 
   let title, body;
   if (isReRead) {
     const idx = Math.min(reReadCount - 1, REREAD_MESSAGES.length - 1);
     ({ title, body } = REREAD_MESSAGES[Math.max(0, idx)]);
+  } else if (unlockedBadge) {
+    title = `Bravo ! Tu as débloqué un badge`;
+    body = `Tu viens de mériter le badge « ${unlockedBadge.name} ». Partage-le pour encourager d'autres lecteurs !`;
   } else {
     const dayMsg = CELEBRATION.days[day];
     ({ title, body } = dayMsg || CELEBRATION.default);
@@ -294,12 +297,24 @@ function showCelebration(day, isReRead = false, reReadCount = 0) {
       <div class="celeb-emoji">🎉</div>
       <h2 class="celeb-title">${escapeHtml(title)}</h2>
       <p class="celeb-body">${escapeHtml(body)}</p>
+      ${unlockedBadge ? `
+        <div class="celeb-badge-card">
+          <div class="celeb-badge-icon">${badgeIcons[unlockedBadge.icon] || I.trophy}</div>
+          <div class="celeb-badge-name">${escapeHtml(unlockedBadge.name)}</div>
+          <div class="celeb-badge-desc">${escapeHtml(unlockedBadge.desc)}</div>
+        </div>
+      ` : ""}
       <div class="celeb-divider"></div>
       <p class="celeb-question">${escapeHtml(REFLECTION_QUESTION)}</p>
       <div class="celeb-actions">
         <button class="btn celeb-btn--notes" data-celeb-action="notes" data-celeb-day="${day}">
           ✏️ Prendre une note
         </button>
+        ${unlockedBadge ? `
+        <button class="btn celeb-btn--share" data-celeb-action="share-badge" data-badge-id="${escapeHtml(unlockedBadge.id)}">
+          ${I.share} Partager le badge
+        </button>
+        ` : ""}
         ${nextDay ? `
         <button class="btn celeb-btn--next" data-celeb-action="next" data-celeb-day="${nextDay}">
           Lire le Jour ${nextDay} <span style="font-size:12px;opacity:.7;">${escapeHtml(nextPassages)}</span>
@@ -326,6 +341,17 @@ function showCelebration(day, isReRead = false, reReadCount = 0) {
     navigate("home");
     setTimeout(() => showNoteModal(day, ""), 100);
   });
+
+  const shareBtn = overlay.querySelector("[data-celeb-action='share-badge']");
+  if (shareBtn) {
+    shareBtn.addEventListener("click", async () => {
+      const badgeId = shareBtn.dataset.badgeId;
+      const badge = badges.find((b) => b.id === badgeId);
+      if (badge) {
+        await shareWithImage({ text: `J'ai débloqué le badge « ${badge.name} » dans Mission 31 !` });
+      }
+    });
+  }
 
   const nextBtn = overlay.querySelector("[data-celeb-action='next']");
   if (nextBtn) {
@@ -886,9 +912,6 @@ function viewStats() {
           <p class="encourage">Il te reste ${31 - completedCount()} jours pour finir la mission.<br/>Continue, tu y es presque !</p>
 
           <div class="stats-actions">
-            <button class="btn" data-action="share-native">
-              ${I.share} Partager ma progression
-            </button>
             <button class="btn btn--ghost" data-nav="globalstats">Voir les stats globales</button>
             <button class="btn btn--danger" data-action="reset">
               Réinitialiser la mission
@@ -2556,9 +2579,9 @@ function fireReminder() {
 // Partage enrichi : génère une image canvas du share-card
 // et la transmet via la Web Share API (avec fallback texte).
 // ------------------------------------------------------------
-async function shareWithImage() {
+async function shareWithImage(options = {}) {
   const day = currentDay();
-  const text = `Je suis la mission #Mission31 ! Jour ${day}/31. Je lis le Nouveau Testament en 31 jours.`;
+  const text = options.text || `Je suis la mission #Mission31 ! Jour ${day}/31. Je lis le Nouveau Testament en 31 jours.`;
   let file = null;
   try {
     const blob = await renderShareImage(day);
