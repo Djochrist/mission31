@@ -82,9 +82,10 @@ export async function syncProgress(completedCount) {
     updated_at: new Date().toISOString(),
   };
   try {
-    await supabase
+    const { error } = await supabase
       .from("mission31_users")
       .upsert(payload, { onConflict: "client_id" });
+    if (error) throw error;
     localStorage.setItem(REG_KEY, "1");
   } catch (err) {
     console.warn("Supabase sync failed:", err);
@@ -95,7 +96,7 @@ export async function syncProgress(completedCount) {
 export async function markInstalled() {
   if (!supabase) return;
   try {
-    await supabase
+    const { error } = await supabase
       .from("mission31_users")
       .upsert(
         {
@@ -106,6 +107,7 @@ export async function markInstalled() {
         },
         { onConflict: "client_id" },
       );
+    if (error) throw error;
     localStorage.setItem(REG_KEY, "1");
   } catch (err) {
     console.warn("Supabase install sync failed:", err);

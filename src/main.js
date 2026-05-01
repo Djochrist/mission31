@@ -961,9 +961,9 @@ function viewStats() {
   const offset = C - (pct / 100) * C;
   const hasGlobalVisitors = Number.isFinite(Number(globalStats?.total_users));
   const hasInstalledUsers = Number.isFinite(Number(globalStats?.installed_users));
-  const globalVisitors = hasGlobalVisitors ? Math.max(Number(globalStats.total_users), 1) : null;
+  const globalVisitors = hasGlobalVisitors ? Number(globalStats.total_users) : null;
   const installedUsers = hasInstalledUsers
-    ? Math.max(Number(globalStats.installed_users), isAppInstalled() ? 1 : 0)
+    ? Number(globalStats.installed_users)
     : null;
   const unavailableLabel = "Pas encore disponible";
   const loadingLabel = "...";
