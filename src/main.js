@@ -2,9 +2,11 @@
 // MISSION 31 : Application principale (Vanilla JS · PWA)
 // ============================================================
 
+import appIconUrl from "./assets/icon-512.png";
 import { readings, passagesText } from "./data/readings.js";
 import { badges, unlockedBadges } from "./data/badges.js";
 import { registerUser, syncProgress, fetchGlobalStats, supabaseEnabled } from "./supabase.js";
+import { CELEBRATION, REFLECTION_QUESTION, REREAD_MESSAGES, COMPLETION_MESSAGES, TOUR_BADGES, TOASTS } from "./data/messages.js";
 import {
   loadBible,
   parsePassage,
@@ -28,10 +30,14 @@ const STORAGE_KEY = "mission31:state:v1";
 const defaultState = {
   startedAt: null,
   progress: {},                // { 1: { done: true, doneAt, batchSize }, ... }
+  reReads: {},                 // { 1: 2, 3: 1, ... } — nombre de relectures par jour
+  completionCount: 0,          // nombre de fois que les 31 jours ont été terminés
   reminders: { enabled: true, times: ["08:00", "20:00"], message: "N'oublie pas ta lecture du jour." },
   lastSyncedAt: null,          // ISO date du dernier sync réussi (multi-appareils)
   memoryVerses: [],            // [{ id, date: "YYYY-MM-DD", ref, text, addedAt }]
   theme: "auto",               // "auto" | "light" | "dark"
+  notes: [],                   // [{ id, dayRef, chapterRef, title, content, createdAt, updatedAt }]
+  highlights: {},              // { "bookId-chapter-verseIdx": "yellow"|"green"|"blue"|"pink" }
 };
 
 function loadState() {
@@ -44,6 +50,10 @@ function loadState() {
       ...parsed,
       reminders: { ...defaultState.reminders, ...(parsed.reminders || {}) },
       memoryVerses: Array.isArray(parsed.memoryVerses) ? parsed.memoryVerses : [],
+      notes: Array.isArray(parsed.notes) ? parsed.notes : [],
+      highlights: (parsed.highlights && typeof parsed.highlights === "object") ? parsed.highlights : {},
+      reReads: (parsed.reReads && typeof parsed.reReads === "object") ? parsed.reReads : {},
+      completionCount: typeof parsed.completionCount === "number" ? parsed.completionCount : 0,
     };
   } catch {
     return { ...defaultState };
@@ -153,6 +163,42 @@ function daysGained() {
   return Math.max(0, completedCount() - currentDay() + 1);
 }
 
+// ------------------------------------------------------------
+// Estimation du temps de lecture
+// Base : ~4 min par chapitre en moyenne (NT français ≈ 18h / 260 chapitres)
+// ------------------------------------------------------------
+const MINUTES_PER_CHAPTER = 4;
+
+function estimateMinutes(passages) {
+  return expandPassages(passages).length * MINUTES_PER_CHAPTER;
+}
+
+function formatReadingTime(minutes) {
+  if (minutes < 60) return `~${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `~${h}h${String(m).padStart(2,"0")}` : `~${h}h`;
+}
+
+function totalMissionMinutes() {
+  return readings.reduce((sum, r) => sum + estimateMinutes(r.passages), 0);
+}
+
+// ------------------------------------------------------------
+// Notes helpers
+// ------------------------------------------------------------
+function notesForDay(day) {
+  return (state.notes || []).filter((n) => n.dayRef === day);
+}
+
+function noteById(id) {
+  return (state.notes || []).find((n) => n.id === id) || null;
+}
+
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
 function showToast(msg) {
   const t = document.createElement("div");
   t.className = "toast";
@@ -161,6 +207,120 @@ function showToast(msg) {
   t.textContent = msg;
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 3000);
+}
+
+// ------------------------------------------------------------
+// Son de célébration (Web Audio API — aucun fichier requis)
+// ------------------------------------------------------------
+function playChime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const t0 = ctx.currentTime + i * 0.15;
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(0.25, t0 + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.6);
+      osc.start(t0);
+      osc.stop(t0 + 0.6);
+    });
+  } catch (_) { /* contexte audio non disponible */ }
+}
+
+// ------------------------------------------------------------
+// Modal de célébration (validation ou relecture)
+// day        : numéro du jour validé
+// isReRead   : true si c'est une relecture
+// reReadCount: nombre de relectures déjà faites pour ce jour
+// ------------------------------------------------------------
+function showCelebration(day, isReRead = false, reReadCount = 0) {
+  playChime();
+
+  let title, body;
+  if (isReRead) {
+    const idx = Math.min(reReadCount - 1, REREAD_MESSAGES.length - 1);
+    ({ title, body } = REREAD_MESSAGES[Math.max(0, idx)]);
+  } else {
+    const dayMsg = CELEBRATION.days[day];
+    ({ title, body } = dayMsg || CELEBRATION.default);
+  }
+
+  const nextDay = (!isReRead && day < 31) ? day + 1 : null;
+  const nextReading = nextDay ? readings.find((r) => r.day === nextDay) : null;
+  const nextPassages = nextReading ? nextReading.passages.join(", ") : "";
+
+  const overlay = document.createElement("div");
+  overlay.className = "celeb-overlay";
+  overlay.innerHTML = `
+    <div class="celeb-box">
+      <div class="celeb-stars" aria-hidden="true">
+        ${Array.from({ length: 12 }, (_, i) =>
+          `<span class="celeb-star" style="--i:${i}">✦</span>`
+        ).join("")}
+      </div>
+      <div class="celeb-emoji">🎉</div>
+      <h2 class="celeb-title">${escapeHtml(title)}</h2>
+      <p class="celeb-body">${escapeHtml(body)}</p>
+      <div class="celeb-divider"></div>
+      <p class="celeb-question">${escapeHtml(REFLECTION_QUESTION)}</p>
+      <div class="celeb-actions">
+        <button class="btn celeb-btn--notes" data-celeb-action="notes" data-celeb-day="${day}">
+          ✏️ Prendre une note
+        </button>
+        ${nextDay ? `
+        <button class="btn celeb-btn--next" data-celeb-action="next" data-celeb-day="${nextDay}">
+          Lire le Jour ${nextDay} <span style="font-size:12px;opacity:.7;">${escapeHtml(nextPassages)}</span>
+        </button>` : ""}
+        <button class="btn btn--ghost celeb-btn--continue" data-celeb-action="continue">
+          Retour à l'accueil
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("celeb-overlay--visible"));
+
+  function dismiss() {
+    overlay.classList.remove("celeb-overlay--visible");
+    setTimeout(() => { overlay.remove(); render(); navigate("home"); }, 350);
+  }
+
+  overlay.querySelector("[data-celeb-action='continue']").addEventListener("click", dismiss);
+
+  overlay.querySelector("[data-celeb-action='notes']").addEventListener("click", () => {
+    overlay.remove();
+    render();
+    navigate("home");
+    setTimeout(() => showNoteModal(day, ""), 100);
+  });
+
+  const nextBtn = overlay.querySelector("[data-celeb-action='next']");
+  if (nextBtn) {
+    nextBtn.addEventListener("click", () => {
+      const nd = parseInt(nextBtn.dataset.celebDay, 10);
+      overlay.classList.remove("celeb-overlay--visible");
+      setTimeout(() => {
+        overlay.remove();
+        navigate(`bible?day=${nd}&i=0`);
+      }, 250);
+    });
+  }
+}
+
+// ------------------------------------------------------------
+// Marquer un jour déjà validé comme relu
+// ------------------------------------------------------------
+function markReRead(day) {
+  state.reReads[day] = (state.reReads[day] || 0) + 1;
+  saveState();
+  const count = state.reReads[day];
+  showCelebration(day, true, count);
 }
 
 // ------------------------------------------------------------
@@ -194,10 +354,16 @@ function markRead(daysCount = 1) {
   syncProgress(completedCount());
 
   if (completedCount() >= 31) {
-    showToast("🎉 Mission accomplie !");
-    setTimeout(() => navigate("completion"), 600);
+    // Tour complet → incrémenter le compteur et aller à l'écran de complétion
+    state.completionCount = (state.completionCount || 0) + 1;
+    saveState();
+    setTimeout(() => navigate("completion"), 400);
+  } else if (daysCount > 1) {
+    // Lecture accélérée : toast simple, pas de modal
+    showToast(`${daysCount} jours validés !`);
   } else {
-    showToast(daysCount > 1 ? `${daysCount} jours validés !` : "Lecture validée !");
+    // Validation d'un seul jour : modal de célébration
+    showCelebration(today, false);
   }
 }
 
@@ -208,7 +374,7 @@ function markRead(daysCount = 1) {
 const routes = [
   "welcome", "home", "reading", "accelerated", "planning", "stats", "rewards",
   "share", "help", "offline", "reminders", "completion", "globalstats",
-  "bible", "memory", "settings",
+  "bible", "memory", "settings", "notes", "how",
 ];
 
 function getRoute() {
@@ -286,6 +452,15 @@ const I = {
   arrowRight: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`,
   arrowLeft: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>`,
   trash: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`,
+  clock: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  clockMed: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  pen: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+  penMed: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+  fileText: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`,
+  highlighter: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l-6 6v3h3l6-6"/><path d="M22 4l-3.5-3.5a2 2 0 0 0-2.83 0l-9 9a2 2 0 0 0 0 2.83l1.5 1.5a2 2 0 0 0 2.83 0l9-9a2 2 0 0 0 0-2.83z"/></svg>`,
+  edit: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`,
+  share: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>`,
+  bell: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
 };
 
 const badgeIcons = { rocket: I.rocket, key: I.key, lock: I.lock, shield: I.shield, compass: I.compass, trophy: I.trophy, bolt: I.bolt, flame: I.flameSpec, medal: I.medal };
@@ -306,11 +481,11 @@ function topbar({ title, leftAction, rightActions = [] }) {
 
 function tabbar(active) {
   const tabs = [
-    { id: "home", icon: I.tabHome, label: "Accueil" },
-    { id: "planning", icon: I.tabPlan, label: "Planning" },
-    { id: "stats", icon: I.tabStats, label: "Stats" },
-    { id: "rewards", icon: I.tabRewards, label: "Récompenses" },
-    { id: "help", icon: I.tabHelp, label: "Aide" },
+    { id: "home",    icon: I.tabHome,    label: "Accueil"  },
+    { id: "planning",icon: I.tabPlan,    label: "Planning" },
+    { id: "rewards", icon: I.trophy,     label: "Badges"   },
+    { id: "stats",   icon: I.tabStats,   label: "Stats"    },
+    { id: "help",    icon: I.tabHelp,    label: "Aide"     },
   ];
   return `
     <nav class="tabbar"><div class="tabbar__inner">
@@ -330,8 +505,10 @@ function viewWelcome() {
       <div class="splash">
         <div></div>
         <div class="splash__hero">
-          <div class="splash__icon">${I.bible}</div>
-          <h1 class="splash__title">MISSION<span>31</span></h1>
+          <div class="splash__icon-wrap">
+            <img class="splash__app-icon" src="${appIconUrl}" alt="Mission 31" />
+            <span class="splash__m31">M31</span>
+          </div>
           <p class="splash__subtitle">Lis le Nouveau Testament<br/>en 31 jours</p>
         </div>
         <div class="splash__cta">
@@ -357,6 +534,8 @@ function viewHome() {
   const completed = completedCount();
   const isTodayDone = state.progress[day]?.done;
   const memVerse = todaysMemoryVerse();
+  const todayMinutes = today ? estimateMinutes(today.passages) : 0;
+  const dayNotes = notesForDay(day);
 
   return `
     <div class="shell">
@@ -371,8 +550,31 @@ function viewHome() {
             <div class="day-card__label">Jour <strong style="color:var(--primary);font-size:24px;font-weight:700;">${day}</strong> / 31</div>
             <div class="day-card__sub" style="margin-top:14px;">Aujourd'hui</div>
             <div class="day-card__passages">${passages}</div>
+            <div class="day-card__meta">
+              <span class="reading-time-badge">${I.clock} ${formatReadingTime(todayMinutes)}</span>
+              ${dayNotes.length > 0 ? `<span class="notes-badge" data-nav="notes?day=${day}">${I.pen} ${dayNotes.length} note${dayNotes.length > 1 ? "s" : ""}</span>` : ""}
+            </div>
             <div class="day-card__actions">
-              <button class="btn" data-nav="bible?day=${day}&i=0">${I.bookOpen} ${isTodayDone ? "Relire aujourd'hui" : "Lire aujourd'hui"}</button>
+              ${(() => {
+                if (isTodayDone && day < 31) {
+                  const nextDay = day + 1;
+                  const nextReading = readings.find((r) => r.day === nextDay);
+                  const nextPassages = nextReading ? nextReading.passages.join(", ") : "";
+                  const nextMin = nextReading ? estimateMinutes(nextReading.passages) : 0;
+                  const nextDone = state.progress[nextDay]?.done;
+                  return `
+                    <div class="next-day-inline ${nextDone ? "next-day-inline--done" : ""}">
+                      <div class="next-day-inline__label">Jour ${nextDay} ${nextDone ? "✓" : "· Suivant"}</div>
+                      <div class="next-day-inline__passages">${escapeHtml(nextPassages)}</div>
+                      <div class="next-day-inline__meta">${I.clock} ${formatReadingTime(nextMin)}</div>
+                      ${nextDone
+                        ? `<span class="next-day-inline__done-label">Déjà validé</span>`
+                        : `<button class="btn btn--sm" data-nav="bible?day=${nextDay}&i=0">${I.bookOpen} Commencer le jour suivant</button>`}
+                    </div>
+                    <button class="btn btn--ghost" data-nav="bible?day=${day}&i=0">${I.bookOpen} Relire aujourd'hui</button>`;
+                }
+                return `<button class="btn" data-nav="bible?day=${day}&i=0">${I.bookOpen} ${isTodayDone ? "Relire aujourd'hui" : "Lire aujourd'hui"}</button>`;
+              })()}
               <button class="btn btn--ghost" data-nav="reading">Voir le détail</button>
             </div>
           </div>
@@ -402,9 +604,9 @@ function viewHome() {
             <span class="streak-card__value">${streakCount()} jours</span>
           </div>
 
-          <div class="card streak-card" style="cursor:pointer" data-nav="accelerated">
-            <span class="streak-card__label">Lecture accélérée</span>
-            <span class="streak-card__value" style="font-size:14px;color:var(--primary);">Avancer →</span>
+          <div class="card streak-card" style="cursor:pointer" data-nav="rewards">
+            <span class="streak-card__label">Mes badges ${I.trophy}</span>
+            <span class="streak-card__value" style="font-size:14px;color:var(--primary);">${unlockedBadges(state).size} débloqués →</span>
           </div>
 
           <a class="group-cta" href="${WHATSAPP_GROUP_URL}" target="_blank" rel="noopener noreferrer">
@@ -424,12 +626,16 @@ function viewReading() {
   const passages = today ? today.passages : [];
   const isDone = state.progress[day]?.done;
   const dateLabel = formatLongDate(dateForDay(day));
+  const chapters = expandPassages(passages);
+  const totalMin = estimateMinutes(passages);
+  const dayNotes = notesForDay(day);
 
   return `
     <div class="shell">
       ${topbar({
         title: `Jour ${day}`,
         leftAction: `<button class="topbar__btn" data-action="back">${I.back}</button>`,
+        rightActions: [`<button class="topbar__btn" data-nav="notes?day=${day}">${I.pen}</button>`],
       })}
       <main class="view">
         <div class="reading">
@@ -437,19 +643,42 @@ function viewReading() {
             <div class="reading__day-label">${dateLabel}</div>
             <div class="reading__day-title">Jour ${day} / 31</div>
             <div class="reading__passage">${passages.join(", ")}</div>
+            <div class="reading__time-row">
+              ${I.clock} <span>${formatReadingTime(totalMin)}</span>
+              <span class="reading__time-sep">·</span>
+              <span>${chapters.length} chapitre${chapters.length > 1 ? "s" : ""}</span>
+            </div>
           </div>
 
           <div class="reading__list">
             <h3 class="reading__list-title">À lire aujourd'hui</h3>
             <div class="reading__chapters">
-              ${expandPassages(passages).map((c, i) => `
+              ${chapters.map((c, i) => `
                 <button class="reading__chapter" data-nav="bible?day=${day}&i=${i}">
                   <span class="reading__chapter-name">${formatChapterLabel(c.name, c.chapter)}</span>
-                  <span class="reading__chapter-go">${I.bookOpen}</span>
+                  <span style="display:flex;align-items:center;gap:6px;">
+                    <span class="reading__chapter-time">${I.clock} ${MINUTES_PER_CHAPTER} min</span>
+                    <span class="reading__chapter-go">${I.bookOpen}</span>
+                  </span>
                 </button>
               `).join("")}
             </div>
           </div>
+
+          ${dayNotes.length > 0 ? `
+            <div class="card notes-preview">
+              <div class="notes-preview__head">
+                ${I.pen} <span class="notes-preview__title">Mes notes du jour</span>
+                <button class="notes-preview__all" data-nav="notes?day=${day}">Tout voir</button>
+              </div>
+              ${dayNotes.slice(0, 2).map((n) => `
+                <div class="notes-preview__item">
+                  ${n.chapterRef ? `<span class="notes-preview__ref">${escapeHtml(n.chapterRef)}</span>` : ""}
+                  <p class="notes-preview__text">${escapeHtml(n.content).slice(0, 80)}${n.content.length > 80 ? "…" : ""}</p>
+                </div>
+              `).join("")}
+            </div>
+          ` : ""}
 
           <div class="card">
             <p class="reading__verse">
@@ -538,11 +767,15 @@ function viewPlanning() {
             const isToday = r.day === today;
             const cls = done ? "plan-row--done" : isToday ? "plan-row--today" : "";
             const dateLabel = formatShortDate(dateForDay(r.day));
+            const mins = estimateMinutes(r.passages);
+            const chapCount = expandPassages(r.passages).length;
+            const dayNoteCount = notesForDay(r.day).length;
             return `
               <button class="plan-row ${cls}" data-day="${r.day}">
                 <span class="plan-row__check">${done ? I.check : isToday ? `<span style="font-size:11px;font-weight:700;color:var(--primary);">${r.day}</span>` : `<span style="font-size:11px;font-weight:600;color:var(--ink-faint);">${r.day}</span>`}</span>
-                <span>
+                <span class="plan-row__body">
                   <div class="plan-row__title">${r.passages.join(", ")}</div>
+                  <div class="plan-row__sub">${I.clock} ${formatReadingTime(mins)} · ${chapCount} ch.${dayNoteCount > 0 ? ` · ${I.pen} ${dayNoteCount}` : ""}</div>
                 </span>
                 <span class="plan-row__date">${isToday ? "Aujourd'hui" : dateLabel}</span>
               </button>`;
@@ -603,9 +836,28 @@ function viewStats() {
             </div>
           </div>
 
+          <div class="stats-grid">
+            <div class="stat-tile">
+              <div class="stat-tile__label">${I.clock} Temps total estimé</div>
+              <div class="stat-tile__value">${formatReadingTime(totalMissionMinutes())}</div>
+            </div>
+            <div class="stat-tile">
+              <div class="stat-tile__label">${I.pen} Mes notes</div>
+              <div class="stat-tile__value stat-tile__value--link" data-nav="notes">${(state.notes || []).length}</div>
+            </div>
+          </div>
+
           <p class="encourage">Il te reste ${31 - completedCount()} jours pour finir la mission.<br/>Continue, tu y es presque !</p>
 
-          <button class="btn btn--ghost" data-nav="globalstats">Voir les stats globales</button>
+          <div class="stats-actions">
+            <button class="btn" data-action="share-native">
+              ${I.share} Partager ma progression
+            </button>
+            <button class="btn btn--ghost" data-nav="globalstats">Voir les stats globales</button>
+            <button class="btn btn--danger" data-action="reset">
+              Réinitialiser la mission
+            </button>
+          </div>
         </div>
       </main>
       ${tabbar("stats")}
@@ -627,19 +879,39 @@ function viewRewards() {
       </div>`;
   }
 
+  const completionCount = state.completionCount || 0;
+
   return `
     <div class="shell">
       ${topbar({ title: "Récompenses" })}
       <main class="view">
         <div class="rewards">
-          <h3 class="rewards__section-title">Badges débloqués</h3>
-          <div class="badge-grid">${completedB.slice(0, 3).map(renderBadge).join("")}</div>
-
-          <h3 class="rewards__section-title">Badges à débloquer</h3>
-          <div class="badge-grid">${completedB.slice(3).map(renderBadge).join("")}</div>
+          <h3 class="rewards__section-title">Badges de progression</h3>
+          <div class="badge-grid">${completedB.map(renderBadge).join("")}</div>
 
           <h3 class="rewards__section-title">Badges spéciaux</h3>
           <div class="badge-grid">${specialB.map(renderBadge).join("")}</div>
+
+          <h3 class="rewards__section-title">Badges de fidélité (tours)</h3>
+          <div class="badge-grid">
+            ${TOUR_BADGES.map((b) => {
+              const isUnlocked = completionCount >= b.required;
+              return `
+                <div class="badge ${isUnlocked ? "" : "badge--locked"}">
+                  <div class="badge__icon">${b.icon}</div>
+                  <div class="badge__name">${escapeHtml(b.name)}</div>
+                  <div class="badge__desc">${escapeHtml(b.desc)}</div>
+                </div>`;
+            }).join("")}
+          </div>
+
+          ${completionCount > 0 ? `
+            <div class="card" style="margin-top:16px;text-align:center;padding:14px;">
+              <div style="display:flex;justify-content:center;margin-bottom:6px;color:var(--primary);">${TOUR_BADGES[0].icon}</div>
+              <div style="font-weight:700;color:var(--primary);">${completionCount} tour${completionCount > 1 ? "s" : ""} accompli${completionCount > 1 ? "s" : ""}</div>
+              <div style="font-size:13px;color:var(--ink-faint);margin-top:4px;">Tu continues à creuser la Parole.</div>
+            </div>
+          ` : ""}
         </div>
       </main>
       ${tabbar("rewards")}
@@ -678,9 +950,9 @@ function viewHelp() {
   const installed = isAppInstalled();
   const items = [
     { icon: I.bookmark,  title: "Versets à mémoriser", sub: "Programme et révise tes versets", nav: "memory", accent: true },
-    { icon: I.settings,  title: "Paramètres", sub: "Date de début, mode sombre", nav: "settings" },
-    { icon: I.question,  title: "Comment fonctionne Mission 31 ?", action: "faq-how" },
-    { icon: I.reading,   title: "Comment utiliser les lectures accélérées ?", action: "faq-acc" },
+    { icon: I.fileText,  title: "Mes notes", sub: `${(state.notes || []).length} note${(state.notes || []).length !== 1 ? "s" : ""} enregistrée${(state.notes || []).length !== 1 ? "s" : ""}`, nav: "notes", accent: true },
+    { icon: I.settings,  title: "Paramètres", sub: "Date de début, mode sombre, rappels, contact", nav: "settings" },
+    { icon: I.question,  title: "Comment fonctionne Mission 31 ?", sub: "Guide complet, lectures accélérées, rappels…", nav: "how" },
     { icon: I.bellSmall, title: "Notifications & rappels", nav: "reminders" },
     !installed && {
       icon: I.install,
@@ -754,6 +1026,20 @@ function viewOffline() {
 
 function viewReminders() {
   const r = state.reminders;
+  const notifSupported = "Notification" in window;
+  const notifPerm = notifSupported ? Notification.permission : "unsupported";
+
+  let permBanner = "";
+  if (!notifSupported) {
+    permBanner = `<div class="notif-banner notif-banner--warn">${I.bell} Notifications non supportées sur ce navigateur.</div>`;
+  } else if (notifPerm === "denied") {
+    permBanner = `<div class="notif-banner notif-banner--err">${I.bell} Notifications bloquées. Autorise-les dans les réglages de ton navigateur puis reviens ici.</div>`;
+  } else if (notifPerm === "default") {
+    permBanner = `<div class="notif-banner notif-banner--info">${I.bell} <span>Les notifications ne sont pas encore autorisées.</span> <button class="btn btn--sm" data-action="notif-request">Autoriser</button></div>`;
+  } else {
+    permBanner = `<div class="notif-banner notif-banner--ok">${I.bell} Notifications autorisées ✓ <button class="btn btn--sm btn--ghost" data-action="notif-test">Tester</button></div>`;
+  }
+
   return `
     <div class="shell">
       ${topbar({
@@ -762,6 +1048,7 @@ function viewReminders() {
       })}
       <main class="view">
         <div class="reminders">
+          ${permBanner}
           <div class="row-toggle">
             <span class="row-toggle__title">Activer les rappels</span>
             <button class="switch ${r.enabled ? "switch--on" : ""}" data-action="toggle-rem"></button>
@@ -795,29 +1082,57 @@ function viewReminders() {
 }
 
 function viewCompletion() {
-  const endDate = formatLongDate(dateForDay(31));
+  const count = state.completionCount || 1;
+  const isFirst = count === 1;
+  const msg = isFirst ? COMPLETION_MESSAGES.first : COMPLETION_MESSAGES.repeat(count);
+  const { title, body, cta } = typeof msg === "object" ? msg : { title: "Mission accomplie !", body: msg, cta: "Nouvelle lancée" };
+
+  // Badges de tour débloqués
+  const earnedTourBadges = TOUR_BADGES.filter((b) => count >= b.required);
+
   return `
     <div class="shell">
       ${topbar({
-        title: "Félicitations !",
+        title: "Mission accomplie !",
         leftAction: `<button class="topbar__btn" data-action="back">${I.back}</button>`,
       })}
       <main class="view view--no-tabs">
         <div class="completion">
-          <div class="completion__check">${I.checkBig}</div>
-          <h2 class="completion__title">Félicitations !</h2>
-          <p class="completion__msg">Tu as terminé la mission 🎉<br/>Que Dieu te bénisse abondamment.</p>
+          <div class="completion__stars" aria-hidden="true">
+            ${Array.from({ length: 10 }, (_, i) => `<span class="celeb-star celeb-star--static" style="--i:${i}">✦</span>`).join("")}
+          </div>
+          <div class="completion__emoji">🏆</div>
+          <h2 class="completion__title">${escapeHtml(title)}</h2>
+          <p class="completion__msg">${escapeHtml(body)}</p>
+
           <div class="completion__stats">
             <div class="stat-tile">
               <div class="stat-tile__label">Jours complétés</div>
               <div class="stat-tile__value">${completedCount()} / 31</div>
             </div>
             <div class="stat-tile">
-              <div class="stat-tile__label">Date de fin</div>
-              <div class="stat-tile__value" style="font-size:15px;">${endDate}</div>
+              <div class="stat-tile__label">Tours accomplis</div>
+              <div class="stat-tile__value">${count}</div>
             </div>
           </div>
-          <button class="btn" data-action="reset">Recommencer une mission</button>
+
+          ${earnedTourBadges.length > 0 ? `
+            <div class="completion__tour-badges">
+              <h3 class="completion__tour-badges-title">Badges de fidélité</h3>
+              <div class="tour-badge-row">
+                ${earnedTourBadges.map((b) => `
+                  <div class="tour-badge">
+                    <span class="tour-badge__icon">${b.icon}</span>
+                    <span class="tour-badge__name">${escapeHtml(b.name)}</span>
+                    <span class="tour-badge__desc">${escapeHtml(b.desc)}</span>
+                  </div>
+                `).join("")}
+              </div>
+            </div>
+          ` : ""}
+
+          <button class="btn" data-action="new-run">${cta}</button>
+          <button class="btn btn--ghost" style="margin-top:10px;" data-nav="home">Retour à l'accueil</button>
         </div>
       </main>
     </div>`;
@@ -929,17 +1244,21 @@ function viewBible(params) {
   const day = parseInt(params.day, 10) || currentDay();
   const isFreeRead = !!(params.b && params.c);
 
-  // Titre & label
   const current = queue[idx];
   const title = current ? formatChapterLabel(current.name, current.chapter) : "Lecture";
+  const chapterRef = current ? formatChapterLabel(current.name, current.chapter) : "";
 
   return `
     <div class="shell">
       ${topbar({
         title: title,
         leftAction: `<button class="topbar__btn" data-action="back">${I.back}</button>`,
+        rightActions: [
+          `<button class="topbar__btn" data-action="open-note-modal" data-day="${day}" data-chapter="${escapeHtml(chapterRef)}" title="Prendre une note">${I.pen}</button>`,
+        ],
       })}
       <main class="view view--bible">
+        <div class="bible-hint">${I.highlighter} Appuie sur un verset pour le surligner ou prendre une note.</div>
         <div class="bible-reader" id="bibleReader">
           <div class="bible-reader__loading">${I.bookOpen} Chargement du texte...</div>
         </div>
@@ -958,10 +1277,12 @@ function viewBible(params) {
 
         ${!isFreeRead && idx >= queue.length - 1 && queue.length > 0 ? `
           <div class="bible-finish">
-            ${state.progress[day]?.done
-              ? `<div class="bible-finish__done">${I.check} Lecture du jour validée.</div>`
-              : `<button class="btn" data-action="mark-today-from-bible" data-day="${day}">J'ai terminé ma lecture</button>`
-            }
+            ${state.progress[day]?.done ? `
+              <button class="btn btn--reread" data-action="mark-reread-from-bible" data-day="${day}">✓ Valider la relecture</button>
+              ${day < 31 ? `<button class="btn" data-nav="bible?day=${day + 1}&i=0">Lire le Jour ${day + 1} →</button>` : ""}
+            ` : `
+              <button class="btn" data-action="mark-today-from-bible" data-day="${day}">J'ai terminé ma lecture</button>
+            `}
           </div>
         ` : ""}
       </main>
@@ -979,6 +1300,7 @@ function renderBibleContent(params) {
   }
   const idx = Math.max(0, Math.min(queue.length - 1, parseInt(params.i, 10) || 0));
   const item = queue[idx];
+  const verseDay = parseInt(params.day, 10) || currentDay();
 
   loadBible().then((bible) => {
     const verses = getChapterVerses(bible, item.id, item.chapter);
@@ -987,11 +1309,21 @@ function renderBibleContent(params) {
       return;
     }
     const heading = SINGLE_CHAPTER_BOOKS.has(item.name) ? item.name : `${item.name} ${item.chapter}`;
+    const chapterLabel = formatChapterLabel(item.name, item.chapter);
+    const highlights = state.highlights || {};
     container.innerHTML = `
       <h1 class="bible-reader__title">${heading}</h1>
       <p class="bible-reader__sub">Louis Segond 1910</p>
       <div class="bible-reader__text">
-        ${verses.map((v, i) => v ? `<p class="bv"><span class="bv__n">${i + 1}</span> <span class="bv__t">${escapeHtml(v)}</span></p>` : "").join("")}
+        ${verses.map((v, i) => {
+          if (!v) return "";
+          const hKey = `${item.id}-${item.chapter}-${i}`;
+          const hColor = highlights[hKey] || "";
+          return `<p class="bv ${hColor ? `bv--hl-${hColor}` : ""}" data-hkey="${hKey}" data-verse="${i + 1}" data-action="verse-menu" data-day="${verseDay}" data-chapter="${escapeHtml(chapterLabel)}">
+            <span class="bv__n">${i + 1}</span>
+            <span class="bv__t">${escapeHtml(v)}</span>
+          </p>`;
+        }).join("")}
       </div>`;
     window.scrollTo({ top: 0 });
   }).catch(() => {
@@ -1082,6 +1414,250 @@ function formatMemoryDate(iso) {
 }
 
 // ============================================================
+// Notes (prendre des notes, les organiser par jour)
+// ============================================================
+function viewNotes(params) {
+  const filterDay = params.day ? parseInt(params.day, 10) : null;
+  const editId = params.edit || null;
+  const noteBeingEdited = editId ? noteById(editId) : null;
+
+  const allNotes = [...(state.notes || [])].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+  const filteredNotes = filterDay ? allNotes.filter((n) => n.dayRef === filterDay) : allNotes;
+
+  const today = todayISO();
+  const defaultDay = filterDay || currentDay();
+
+  return `
+    <div class="shell">
+      ${topbar({
+        title: filterDay ? `Notes · Jour ${filterDay}` : "Mes notes",
+        leftAction: `<button class="topbar__btn" data-action="back">${I.back}</button>`,
+      })}
+      <main class="view">
+        <div class="notes-page">
+
+          ${noteBeingEdited ? `
+            <div class="card notes-form notes-form--edit">
+              <h3 class="notes-form__title">${I.edit} Modifier la note</h3>
+              <div class="field">
+                <label for="noteTitle">Titre (optionnel)</label>
+                <input type="text" id="noteTitle" placeholder="ex. Réflexion sur la grâce" value="${escapeHtml(noteBeingEdited.title || "")}" autocomplete="off"/>
+              </div>
+              <div class="field">
+                <label for="noteContent">Note</label>
+                <textarea id="noteContent" rows="5" placeholder="Écris ta note ici...">${escapeHtml(noteBeingEdited.content)}</textarea>
+              </div>
+              <div class="notes-form__actions">
+                <button class="btn" data-action="note-save-edit" data-id="${editId}">Enregistrer</button>
+                <button class="btn btn--ghost" data-action="back">Annuler</button>
+              </div>
+            </div>
+          ` : `
+            <div class="card notes-form">
+              <h3 class="notes-form__title">${I.pen} Nouvelle note</h3>
+              <div class="field">
+                <label for="noteDay">Jour</label>
+                <select id="noteDay">
+                  ${readings.map((r) => `<option value="${r.day}" ${r.day === defaultDay ? "selected" : ""}>${r.day} : ${r.passages.join(", ")}</option>`).join("")}
+                </select>
+              </div>
+              <div class="field">
+                <label for="noteChapter">Passage (optionnel)</label>
+                <input type="text" id="noteChapter" placeholder="ex. Jean 3" autocomplete="off"/>
+              </div>
+              <div class="field">
+                <label for="noteTitle">Titre (optionnel)</label>
+                <input type="text" id="noteTitle" placeholder="ex. Ce qui m'a marqué aujourd'hui" autocomplete="off"/>
+              </div>
+              <div class="field">
+                <label for="noteContent">Note</label>
+                <textarea id="noteContent" rows="5" placeholder="Écris ta note ici..."></textarea>
+              </div>
+              <button class="btn" data-action="note-add">Enregistrer la note</button>
+            </div>
+          `}
+
+          <div class="notes-filter">
+            <button class="notes-filter__btn ${!filterDay ? "notes-filter__btn--active" : ""}" data-nav="notes">Tout (${allNotes.length})</button>
+            ${readings.filter((r) => notesForDay(r.day).length > 0).map((r) => `
+              <button class="notes-filter__btn ${filterDay === r.day ? "notes-filter__btn--active" : ""}" data-nav="notes?day=${r.day}">Jour ${r.day} (${notesForDay(r.day).length})</button>
+            `).join("")}
+          </div>
+
+          <h3 class="notes-page__section">${filteredNotes.length} note${filteredNotes.length !== 1 ? "s" : ""}${filterDay ? ` · Jour ${filterDay}` : ""}</h3>
+
+          ${filteredNotes.length === 0 ? `
+            <div class="card notes-empty">
+              <div class="notes-empty__icon">${I.pen}</div>
+              <p>Aucune note pour le moment. Commence à écrire pendant ta lecture !</p>
+            </div>
+          ` : filteredNotes.map((n) => {
+            const dateStr = n.createdAt ? formatShortDate(new Date(n.createdAt)) : "";
+            const updatedStr = n.updatedAt && n.updatedAt !== n.createdAt ? `· modifié ${formatShortDate(new Date(n.updatedAt))}` : "";
+            return `
+              <div class="card note-card" id="note-${n.id}">
+                <div class="note-card__head">
+                  <div class="note-card__meta">
+                    <span class="note-card__day">Jour ${n.dayRef || "?"}</span>
+                    ${n.chapterRef ? `<span class="note-card__chapter">${escapeHtml(n.chapterRef)}</span>` : ""}
+                    <span class="note-card__date">${dateStr} ${updatedStr}</span>
+                  </div>
+                  <div class="note-card__actions">
+                    <button class="note-card__btn" data-nav="notes?edit=${n.id}" title="Modifier">${I.edit}</button>
+                    <button class="note-card__btn note-card__btn--del" data-action="note-del" data-id="${n.id}" title="Supprimer">${I.trash}</button>
+                  </div>
+                </div>
+                ${n.title ? `<div class="note-card__title">${escapeHtml(n.title)}</div>` : ""}
+                <p class="note-card__content">${escapeHtml(n.content)}</p>
+              </div>`;
+          }).join("")}
+        </div>
+      </main>
+      ${tabbar("help")}
+    </div>`;
+}
+
+// ============================================================
+// Comment fonctionne Mission 31 (page dédiée)
+// ============================================================
+function viewHow() {
+  return `
+    <div class="shell">
+      ${topbar({
+        title: "Comment ça marche ?",
+        leftAction: `<button class="topbar__btn" data-action="back">${I.back}</button>`,
+      })}
+      <main class="view view--no-tabs">
+        <div class="how-page">
+
+          <div class="how-hero">
+            <div class="how-hero__icon">📖</div>
+            <h2 class="how-hero__title">Mission 31</h2>
+            <p class="how-hero__sub">Lis tout le Nouveau Testament en seulement 31 jours.<br/>Simple, guidé, communautaire.</p>
+          </div>
+
+          <!-- Vue d'ensemble -->
+          <div class="how-section">
+            <div class="how-section__header">
+              <div class="how-section__icon">${I.bible}</div>
+              <h3 class="how-section__title">C'est quoi Mission 31 ?</h3>
+            </div>
+            <p class="how-section__body">
+              Mission 31 est un plan de lecture qui te permet de parcourir <strong>les 27 livres du Nouveau Testament</strong> en exactement 31 jours.
+              Chaque jour correspond à un passage précis, soigneusement découpé pour une lecture d'environ <strong>15 à 30 minutes</strong>.
+              Tu peux lire à ton rythme, seul ou en groupe.
+            </p>
+          </div>
+
+          <!-- Comment lire chaque jour -->
+          <div class="how-section">
+            <div class="how-section__header">
+              <div class="how-section__icon">${I.tabPlan}</div>
+              <h3 class="how-section__title">Comment lire chaque jour</h3>
+            </div>
+            <ul class="how-steps">
+              <li class="how-step">
+                <span class="how-step__num">1</span>
+                <span class="how-step__text">Ouvre l'app et consulte le <strong>passage du jour</strong> sur l'accueil.</span>
+              </li>
+              <li class="how-step">
+                <span class="how-step__num">2</span>
+                <span class="how-step__text">Appuie sur <strong>"Lire"</strong> pour accéder au texte intégral dans l'app (Louis Segond 1910).</span>
+              </li>
+              <li class="how-step">
+                <span class="how-step__num">3</span>
+                <span class="how-step__text">Lis le passage, surligne des versets et prends des <strong>notes</strong> si tu le souhaites.</span>
+              </li>
+              <li class="how-step">
+                <span class="how-step__num">4</span>
+                <span class="how-step__text">Appuie sur <strong>"J'ai terminé ma lecture"</strong> pour valider le jour et gagner un badge.</span>
+              </li>
+            </ul>
+            <div class="how-tip">💡 Tu peux aussi valider ta lecture depuis l'accueil sans passer par le lecteur intégré.</div>
+          </div>
+
+          <!-- Lectures accélérées -->
+          <div class="how-section">
+            <div class="how-section__header">
+              <div class="how-section__icon">${I.bolt}</div>
+              <h3 class="how-section__title">Lectures accélérées</h3>
+            </div>
+            <p class="how-section__body" style="margin-bottom:10px;">
+              Tu as plus de temps un jour donné, ou tu veux rattraper un retard ? La <strong>lecture accélérée</strong> te permet de valider <strong>2, 3, 5, 10 ou 15 jours d'un coup</strong>.
+            </p>
+            <ul class="how-steps">
+              <li class="how-step">
+                <span class="how-step__num">1</span>
+                <span class="how-step__text">Depuis l'accueil, appuie sur <strong>"Lecture accélérée"</strong>.</span>
+              </li>
+              <li class="how-step">
+                <span class="how-step__num">2</span>
+                <span class="how-step__text">Choisis le nombre de jours que tu veux valider (1 à 15).</span>
+              </li>
+              <li class="how-step">
+                <span class="how-step__num">3</span>
+                <span class="how-step__text">Lis les passages correspondants dans ta Bible, puis <strong>confirme</strong> la lecture.</span>
+              </li>
+            </ul>
+            <div class="how-tip">⚡ La lecture accélérée ne remplace pas la qualité : prends le temps de bien comprendre la Parole avant de valider.</div>
+          </div>
+
+          <!-- Surlignage et notes -->
+          <div class="how-section">
+            <div class="how-section__header">
+              <div class="how-section__icon">${I.pen}</div>
+              <h3 class="how-section__title">Notes &amp; surlignage</h3>
+            </div>
+            <p class="how-section__body">
+              Dans le lecteur de Bible intégré, <strong>appuie sur n'importe quel verset</strong> pour l'annoter ou le surligner en jaune, vert, bleu ou rose.
+              Tes notes sont organisées par jour de lecture et accessibles depuis l'onglet Aide → Mes notes.
+            </p>
+          </div>
+
+          <!-- Rappels -->
+          <div class="how-section">
+            <div class="how-section__header">
+              <div class="how-section__icon">${I.bell}</div>
+              <h3 class="how-section__title">Rappels &amp; notifications</h3>
+            </div>
+            <p class="how-section__body" style="margin-bottom:10px;">
+              Active les rappels pour ne jamais oublier ta lecture du jour. Tu peux configurer <strong>jusqu'à 4 heures de rappel</strong> personnalisées et un message motivant.
+            </p>
+            <button class="btn btn--ghost" data-nav="reminders">Configurer mes rappels →</button>
+          </div>
+
+          <!-- Badges & progression -->
+          <div class="how-section">
+            <div class="how-section__header">
+              <div class="how-section__icon">${I.tabRewards}</div>
+              <h3 class="how-section__title">Badges &amp; progression</h3>
+            </div>
+            <p class="how-section__body">
+              À chaque jour validé, tu progresses et débloques des <strong>badges</strong> de progression, de fidélité et spéciaux.
+              Tu peux suivre ton avancement dans l'onglet Stats et partager ta progression avec ta communauté via WhatsApp.
+            </p>
+          </div>
+
+          <!-- Multi-appareils -->
+          <div class="how-section">
+            <div class="how-section__header">
+              <div class="how-section__icon">${I.tabStats}</div>
+              <h3 class="how-section__title">Relire &amp; recommencer</h3>
+            </div>
+            <p class="how-section__body">
+              Une fois les 31 jours terminés, tu peux <strong>relancer une nouvelle mission</strong> pour approfondir ta lecture.
+              Chaque passage peut aussi être relu pour en extraire de nouvelles richesses, et les relectures sont comptabilisées séparément.
+            </p>
+          </div>
+
+          <button class="btn" data-nav="home">Commencer ma lecture →</button>
+
+        </div>
+      </main>
+    </div>`;
+}
+
+// ============================================================
 // Settings (date de début personnalisée + thème)
 // ============================================================
 function viewSettings() {
@@ -1123,6 +1699,31 @@ function viewSettings() {
                 ${I.settings}<span>Auto</span>
               </button>
             </div>
+          </div>
+
+          <div class="card">
+            <h3 class="settings__section-title">${I.bell} Notifications &amp; rappels</h3>
+            <p class="settings__section-sub">Configure tes heures de rappel pour ne jamais oublier ta lecture du jour.</p>
+            <button class="btn btn--ghost" data-nav="reminders">Gérer mes rappels →</button>
+          </div>
+
+          <div class="card">
+            <h3 class="settings__section-title">${I.mail} Contact &amp; communauté</h3>
+            <p class="settings__section-sub">Une question, un bug ou une suggestion ? Contacte le développeur ou rejoins la communauté.</p>
+            <a class="settings-contact-row" href="mailto:${CONTACT_EMAIL}?subject=Mission%2031">
+              <div class="settings-contact-row__icon">${I.mail}</div>
+              <div class="settings-contact-row__body">
+                <div class="settings-contact-row__title">Contacter le développeur</div>
+                <div class="settings-contact-row__sub">${CONTACT_EMAIL}</div>
+              </div>
+            </a>
+            <a class="settings-contact-row" href="${WHATSAPP_GROUP_URL}" target="_blank" rel="noopener noreferrer">
+              <div class="settings-contact-row__icon">${I.whatsapp}</div>
+              <div class="settings-contact-row__body">
+                <div class="settings-contact-row__title">Groupe WhatsApp Mission 31</div>
+                <div class="settings-contact-row__sub">Rejoins la communauté</div>
+              </div>
+            </a>
           </div>
 
           <div class="card settings__danger">
@@ -1167,6 +1768,8 @@ const VIEWS = {
   bible: viewBible,
   memory: viewMemory,
   settings: viewSettings,
+  notes: viewNotes,
+  how: viewHow,
 };
 
 function render() {
@@ -1210,6 +1813,88 @@ if (window.matchMedia) {
 }
 
 // ------------------------------------------------------------
+// Popover verset (surlignage + note)
+// ------------------------------------------------------------
+function showVerseMenu(hKey, day, chapterRef, verseEl) {
+  // Fermer un éventuel popover existant
+  document.getElementById("versePopover")?.remove();
+
+  if (!state.highlights) state.highlights = {};
+  const currentColor = state.highlights[hKey] || "";
+  const colors = ["yellow", "green", "blue", "pink"];
+  const colorLabels = { yellow: "🟡", green: "🟢", blue: "🔵", pink: "🩷" };
+  const colorNames = { yellow: "Jaune", green: "Vert", blue: "Bleu", pink: "Rose" };
+
+  const pop = document.createElement("div");
+  pop.id = "versePopover";
+  pop.className = "verse-pop";
+
+  // Position : juste au-dessus ou en dessous du verset
+  const rect = verseEl.getBoundingClientRect();
+  const below = rect.bottom + 120 < window.innerHeight;
+  const top = below ? rect.bottom + window.scrollY + 6 : rect.top + window.scrollY - 120;
+  pop.style.top = `${top}px`;
+  pop.style.left = `50%`;
+  pop.style.transform = `translateX(-50%)`;
+
+  pop.innerHTML = `
+    <div class="verse-pop__colors">
+      ${colors.map((c) => `
+        <button class="verse-pop__color verse-pop__color--${c} ${currentColor === c ? "verse-pop__color--active" : ""}"
+          data-vpcolor="${c}" title="${colorNames[c]}">${colorLabels[c]}</button>
+      `).join("")}
+      ${currentColor ? `<button class="verse-pop__clear" data-vpcolor="" title="Retirer">✕</button>` : ""}
+    </div>
+    <button class="verse-pop__note" data-vpnote="${day}" data-vpchapter="${escapeHtml(chapterRef)}">
+      ✏️ Note
+    </button>`;
+
+  document.body.appendChild(pop);
+  requestAnimationFrame(() => pop.classList.add("verse-pop--visible"));
+
+  // Surlignage
+  pop.querySelectorAll("[data-vpcolor]").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const color = btn.dataset.vpcolor;
+      if (color) {
+        state.highlights[hKey] = color;
+        showToast(colorNames[color]);
+      } else {
+        delete state.highlights[hKey];
+        showToast(TOASTS.highlightRemoved);
+      }
+      saveState();
+      // Mettre à jour la classe du verset
+      const verseP = document.querySelector(`[data-hkey="${hKey}"]`);
+      if (verseP) {
+        colors.forEach((c) => verseP.classList.remove(`bv--hl-${c}`));
+        if (color) verseP.classList.add(`bv--hl-${color}`);
+      }
+      pop.remove();
+    });
+  });
+
+  // Note
+  const noteBtn = pop.querySelector("[data-vpnote]");
+  if (noteBtn) {
+    noteBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      pop.remove();
+      showNoteModal(parseInt(noteBtn.dataset.vpnote, 10) || currentDay(), noteBtn.dataset.vpchapter || "");
+    });
+  }
+}
+
+// Fermer le popover en cliquant en dehors
+document.addEventListener("click", (e) => {
+  const pop = document.getElementById("versePopover");
+  if (pop && !pop.contains(e.target) && !e.target.closest("[data-action='verse-menu']")) {
+    pop.remove();
+  }
+}, true);
+
+// ------------------------------------------------------------
 // Event delegation
 // ------------------------------------------------------------
 document.addEventListener("click", (e) => {
@@ -1234,9 +1919,13 @@ document.addEventListener("click", (e) => {
     return;
   }
 
-  // Lignes du planning : on conserve l'ancien comportement (ouvre la lecture du jour)
+  // Lignes du planning : navigue vers la lecture du jour sélectionné
   const dayEl = e.target.closest("[data-day]");
-  if (dayEl) { navigate("reading"); return; }
+  if (dayEl) {
+    const day = parseInt(dayEl.dataset.day, 10);
+    if (day) navigate(`bible?day=${day}&i=0`);
+    return;
+  }
 });
 
 function handleAction(actionEl) {
@@ -1310,6 +1999,25 @@ function handleAction(actionEl) {
       }
       break;
     }
+    case "notif-request": {
+      if (!("Notification" in window)) { showToast("Notifications non supportées."); break; }
+      Notification.requestPermission().then((perm) => {
+        if (perm === "granted") { scheduleReminders(); render(); showToast("Notifications activées !"); }
+        else if (perm === "denied") { render(); showToast("Permission refusée. Modifie les réglages du navigateur."); }
+      });
+      break;
+    }
+    case "notif-test": {
+      if (!("Notification" in window) || Notification.permission !== "granted") {
+        showToast("Autorise d'abord les notifications."); break;
+      }
+      const opts = { body: "Ceci est un test. Mission 31 fonctionne !", icon: "./icons/icon-192.png", tag: "mission31-test" };
+      if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.ready.then((reg) => reg.showNotification("Mission 31", opts));
+      } else { new Notification("Mission 31", opts); }
+      showToast("Notification test envoyée !");
+      break;
+    }
     case "share-whatsapp": {
       const txt = encodeURIComponent(`Je suis la mission #Mission31 ! Jour ${currentDay()}/31. Je lis le Nouveau Testament en 31 jours. Rejoins-moi 🙏`);
       window.open(`https://wa.me/?text=${txt}`, "_blank");
@@ -1326,17 +2034,15 @@ function handleAction(actionEl) {
       break;
     }
     case "reset":
-      if (confirm("Recommencer la mission ? Ta progression sera réinitialisée.")) {
+      if (confirm("Réinitialiser toutes les données ? Cette action est irréversible.")) {
         state = { ...defaultState };
         saveState();
         navigate("welcome");
       }
       break;
     case "faq-how":
-      alert("Mission 31 te propose un plan de lecture pour parcourir tout le Nouveau Testament en 31 jours. Chaque jour, ouvre l'app, lis le passage proposé puis valide ta lecture. Tu peux activer des rappels pour ne rien manquer.");
-      break;
     case "faq-acc":
-      alert("Si tu as plus de temps un jour donné, utilise la lecture accélérée pour valider plusieurs jours d'un coup. Idéal pour rattraper un retard ou prendre de l'avance !");
+      navigate("how");
       break;
     case "install":
       triggerInstall();
@@ -1352,6 +2058,28 @@ function handleAction(actionEl) {
     }
     case "modal-close": {
       document.querySelector(".modal")?.remove();
+      break;
+    }
+    case "quick-note-save": {
+      const day = parseInt(actionEl.dataset.day, 10) || currentDay();
+      const chapterRef = actionEl.dataset.chapter || "";
+      const quickTitle = (document.getElementById("quickNoteTitle")?.value || "").trim();
+      const content = (document.getElementById("quickNoteContent")?.value || "").trim();
+      if (!content) { showToast("La note ne peut pas être vide."); break; }
+      if (!state.notes) state.notes = [];
+      const now = new Date().toISOString();
+      state.notes.push({
+        id: generateId(),
+        dayRef: day,
+        chapterRef: chapterRef || null,
+        title: quickTitle || null,
+        content,
+        createdAt: now,
+        updatedAt: now,
+      });
+      saveState();
+      document.querySelector(".note-modal")?.remove();
+      showToast("Note enregistrée !");
       break;
     }
     // ------------------------------------------------------
@@ -1408,12 +2136,79 @@ function handleAction(actionEl) {
       break;
     }
     // ------------------------------------------------------
+    // Notes
+    // ------------------------------------------------------
+    case "note-add": {
+      const dayRef = parseInt(document.getElementById("noteDay")?.value, 10) || currentDay();
+      const chapterRef = (document.getElementById("noteChapter")?.value || "").trim();
+      const noteTitle = (document.getElementById("noteTitle")?.value || "").trim();
+      const content = (document.getElementById("noteContent")?.value || "").trim();
+      if (!content) { showToast("La note ne peut pas être vide."); break; }
+      if (!state.notes) state.notes = [];
+      const now = new Date().toISOString();
+      state.notes.push({
+        id: generateId(),
+        dayRef,
+        chapterRef: chapterRef || null,
+        title: noteTitle || null,
+        content,
+        createdAt: now,
+        updatedAt: now,
+      });
+      saveState();
+      showToast("Note enregistrée !");
+      navigate(`notes?day=${dayRef}`);
+      break;
+    }
+    case "note-del": {
+      const id = actionEl.dataset.id;
+      if (!id) break;
+      if (confirm("Supprimer cette note ?")) {
+        state.notes = (state.notes || []).filter((n) => n.id !== id);
+        saveState();
+        showToast("Note supprimée.");
+        render();
+      }
+      break;
+    }
+    case "note-save-edit": {
+      const id = actionEl.dataset.id;
+      const noteTitle = (document.getElementById("noteTitle")?.value || "").trim();
+      const content = (document.getElementById("noteContent")?.value || "").trim();
+      if (!content) { showToast("La note ne peut pas être vide."); break; }
+      const note = noteById(id);
+      if (!note) break;
+      note.title = noteTitle || null;
+      note.content = content;
+      note.updatedAt = new Date().toISOString();
+      saveState();
+      showToast("Note mise à jour !");
+      navigate(`notes${note.dayRef ? `?day=${note.dayRef}` : ""}`);
+      break;
+    }
+    // ------------------------------------------------------
+    // Popover verset : surlignage + note
+    // ------------------------------------------------------
+    case "verse-menu": {
+      const hKey = actionEl.dataset.hkey;
+      const verseDay = parseInt(actionEl.dataset.day, 10) || currentDay();
+      const chapterRef = actionEl.dataset.chapter || "";
+      if (!hKey) break;
+      showVerseMenu(hKey, verseDay, chapterRef, actionEl);
+      break;
+    }
+    // Open note modal from Bible reader
+    case "open-note-modal": {
+      const day = parseInt(actionEl.dataset.day, 10) || currentDay();
+      const chapter = actionEl.dataset.chapter || "";
+      showNoteModal(day, chapter);
+      break;
+    }
+    // ------------------------------------------------------
     // Validation depuis le lecteur Bible
     // ------------------------------------------------------
     case "mark-today-from-bible": {
       const day = parseInt(actionEl.dataset.day, 10) || currentDay();
-      // Si l'utilisateur lit le jour courant : on marque normalement.
-      // Pour un autre jour : on marque uniquement ce jour.
       if (day === currentDay()) {
         markRead(1);
       } else {
@@ -1421,9 +2216,32 @@ function handleAction(actionEl) {
         if (!state.startedAt) state.startedAt = new Date().toISOString();
         saveState();
         syncProgress(completedCount());
-        showToast("Lecture validée !");
+        showCelebration(day, false);
       }
-      navigate("home");
+      break;
+    }
+    // ------------------------------------------------------
+    // Validation d'une relecture depuis le lecteur Bible
+    // ------------------------------------------------------
+    case "mark-reread-from-bible": {
+      const day = parseInt(actionEl.dataset.day, 10) || currentDay();
+      markReRead(day);
+      break;
+    }
+    // ------------------------------------------------------
+    // Nouvelle lancée (reset progression, garde l'historique)
+    // ------------------------------------------------------
+    case "new-run": {
+      if (confirm("Démarrer une nouvelle lancée ? Ta progression sera remise à zéro mais ton historique de tours est conservé.")) {
+        const savedCount = state.completionCount || 0;
+        const savedReReads = state.reReads || {};
+        state = { ...defaultState };
+        state.completionCount = savedCount;
+        state.reReads = savedReReads;
+        saveState();
+        showToast(TOASTS.newRunStarted);
+        navigate("welcome");
+      }
       break;
     }
   }
@@ -1531,6 +2349,36 @@ function showInstallModal({ title, steps, note }) {
     </div>
   `;
   document.body.appendChild(el);
+}
+
+// -------------------------------------------------------
+// Modale de prise de note rapide (depuis le lecteur Bible)
+// -------------------------------------------------------
+function showNoteModal(day, chapterRef) {
+  document.querySelector(".note-modal")?.remove();
+  const el = document.createElement("div");
+  el.className = "modal note-modal";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-modal", "true");
+  el.setAttribute("aria-label", "Nouvelle note");
+  el.innerHTML = `
+    <div class="modal__backdrop" data-action="modal-close"></div>
+    <div class="modal__card">
+      <h3 class="modal__title">${I.pen} Note rapide</h3>
+      ${chapterRef ? `<p style="font-size:13px;color:var(--ink-faint);margin:0 0 10px;">${escapeHtml(chapterRef)}</p>` : ""}
+      <div class="field">
+        <label for="quickNoteTitle">Titre (optionnel)</label>
+        <input type="text" id="quickNoteTitle" placeholder="ex. Ce verset m'interpelle…" autocomplete="off"/>
+      </div>
+      <div class="field">
+        <label for="quickNoteContent">Ma note</label>
+        <textarea id="quickNoteContent" rows="4" placeholder="Écris tes réflexions, insights..."></textarea>
+      </div>
+      <button class="btn" data-action="quick-note-save" data-day="${day}" data-chapter="${escapeHtml(chapterRef)}">Enregistrer</button>
+    </div>
+  `;
+  document.body.appendChild(el);
+  setTimeout(() => el.querySelector("textarea")?.focus(), 100);
 }
 
 window.appInstalled && window.removeEventListener("appinstalled", window.appInstalled);
@@ -1798,6 +2646,18 @@ render();
 attachInstallBanner(); // affiche la bannière même sans beforeinstallprompt (iOS, etc.)
 registerUser();        // compte cet appareil dans les stats globales (silencieux)
 scheduleReminders();   // planifie les notifications si déjà autorisées
+
+// Demande la permission de notification après 5 s si reminders.enabled
+// et que la permission n'a pas encore été accordée ou refusée.
+if (state.reminders?.enabled && "Notification" in window) {
+  setTimeout(() => {
+    if (Notification.permission === "default") {
+      Notification.requestPermission().then((perm) => {
+        if (perm === "granted") scheduleReminders();
+      });
+    }
+  }, 5000);
+}
 
 // Re-planifie les rappels au retour de l'app au premier plan.
 document.addEventListener("visibilitychange", () => {

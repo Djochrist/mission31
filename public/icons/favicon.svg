@@ -6,5 +6,5 @@
     <line x1="32" y1="20" x2="32" y2="36"/>
     <line x1="26" y1="28" x2="38" y2="28"/>
   </g>
-  <text x="32" y="60" text-anchor="middle" fill="#2d8a8a" font-family="sans-serif" font-size="7" font-weight="800">M31</text>
+  <text x="32" y="60" text-anchor="middle" fill="rgba(255,255,255,0.75)" font-family="sans-serif" font-size="6" font-weight="300" letter-spacing="2">M31</text>
 </svg>
