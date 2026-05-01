@@ -220,6 +220,22 @@ function showToast(msg) {
   setTimeout(() => t.remove(), 3000);
 }
 
+function notifyBadgeUnlock(badge) {
+  showToast(`Badge débloqué : ${badge.name}`);
+  if ("Notification" in window && Notification.permission === "granted") {
+    const opts = {
+      body: `Tu as débloqué le badge « ${badge.name} » !`,
+      icon: "./icons/icon-192.png",
+      tag: `mission31-badge-${badge.id}`,
+    };
+    if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.ready.then((reg) => reg.showNotification("Mission 31", opts));
+    } else {
+      new Notification("Mission 31", opts);
+    }
+  }
+}
+
 // ------------------------------------------------------------
 // Son de célébration (Web Audio API — aucun fichier requis)
 // ------------------------------------------------------------
@@ -351,6 +367,7 @@ function isAndroid() {
 }
 
 function markRead(daysCount = 1) {
+  const previousBadges = unlockedBadges(state);
   const today = currentDay();
   for (let i = 0; i < daysCount; i++) {
     const d = today + i;
@@ -364,16 +381,22 @@ function markRead(daysCount = 1) {
   // Synchronisation avec Supabase (silencieuse, n'affecte pas l'UX)
   syncProgress(completedCount());
 
+  const currentBadges = unlockedBadges(state);
+  [...currentBadges].forEach((id) => {
+    if (!previousBadges.has(id)) {
+      const badge = badges.find((b) => b.id === id);
+      if (badge) notifyBadgeUnlock(badge);
+    }
+  });
+
   if (completedCount() >= 31) {
     // Tour complet → incrémenter le compteur et aller à l'écran de complétion
     state.completionCount = (state.completionCount || 0) + 1;
     saveState();
     setTimeout(() => navigate("completion"), 400);
   } else if (daysCount > 1) {
-    // Lecture accélérée : toast simple, pas de modal
     showToast(`${daysCount} jours validés !`);
   } else {
-    // Validation d'un seul jour : modal de célébration
     showCelebration(today, false);
   }
 }
@@ -1168,7 +1191,7 @@ function viewGlobalStats() {
             <div class="gstats__empty">
               <div class="gstats__empty-icon">${I.bibleSmall}</div>
               <p><strong>Stats globales indisponibles.</strong></p>
-              <p>La connexion à la base de données n'est pas configurée pour cet appareil.</p>
+              <p>La connexion à Supabase n'est pas configurée ici. Vérifie les variables d'environnement <code>VITE_SUPABASE_URL</code> et <code>VITE_SUPABASE_ANON_KEY</code>.</p>
             </div>
           ` : `
             <div class="gstats__loading">Chargement des statistiques...</div>
