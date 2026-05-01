@@ -960,9 +960,7 @@ function viewStats() {
   const hasInstalledUsers = Number.isFinite(Number(globalStats?.installed_users));
   const globalVisitors = hasGlobalVisitors ? Number(globalStats.total_users) : null;
   const installedUsers = hasInstalledUsers ? Number(globalStats.installed_users) : null;
-  const globalCaption = hasGlobalVisitors
-    ? "Ces chiffres viennent de Supabase, sans compte et sans nom."
-    : "Connexion aux stats globales... Si rien ne charge, Supabase n'est pas connecté sur ce build.";
+  const globalCaption = hasGlobalVisitors ? "" : "Données indisponibles";
   return `
     <div class="shell">
       ${topbar({ title: "Stats" })}
@@ -1044,7 +1042,7 @@ function viewStats() {
                   <div class="visitor-counter__value">${hasInstalledUsers ? installedUsers.toLocaleString("fr-FR") : "..."}</div>
                 </div>
               </div>
-              <div class="visitor-counter__caption">${globalCaption}</div>
+              ${globalCaption ? `<div class="visitor-counter__caption">${globalCaption}</div>` : ""}
             </div>
           </div>
 
