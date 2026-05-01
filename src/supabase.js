@@ -4,6 +4,8 @@
 // Variables d'environnement Vite (préfixe VITE_ obligatoire) :
 //   VITE_SUPABASE_URL       = https://xxxxx.supabase.co
 //   VITE_SUPABASE_ANON_KEY  = eyJhbGciOi...
+//   VITE_SUPABASE_PUBLISHABLE_KEY est aussi accepté.
+// Les variables NEXT_PUBLIC_* générées par Supabase sont acceptées via vite.config.js.
 //
 // Si l'une des deux est absente, le module reste désactivé et
 // l'app continue de fonctionner normalement en mode local.
@@ -11,8 +13,15 @@
 
 import { createClient } from "@supabase/supabase-js";
 
-const URL = import.meta.env.VITE_SUPABASE_URL;
-const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const URL =
+  import.meta.env.VITE_SUPABASE_URL ||
+  import.meta.env.NEXT_PUBLIC_SUPABASE_URL;
+
+const KEY =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
 export const supabaseEnabled = Boolean(URL && KEY);
 

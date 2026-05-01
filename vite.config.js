@@ -33,6 +33,7 @@ function swVersionPlugin() {
 // Configuration Vite : vanilla JS, build statique vers dist/
 export default defineConfig({
   base: "./",
+  envPrefix: ["VITE_", "NEXT_PUBLIC_"],
   plugins: [swVersionPlugin()],
   build: {
     outDir: "dist",

@@ -417,7 +417,9 @@ VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 ```
 
-Le préfixe `VITE_` est **obligatoire** (exposition côté client par Vite).
+`VITE_SUPABASE_PUBLISHABLE_KEY` est accepté à la place de `VITE_SUPABASE_ANON_KEY`.
+Les variables `NEXT_PUBLIC_SUPABASE_URL` et `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+générées par Supabase sont aussi acceptées via `envPrefix` dans `vite.config.js`.
 Si vides → toute la logique Supabase est désactivée silencieusement.
 
 ### 8.2. Fonctions exportées (`src/supabase.js`)
