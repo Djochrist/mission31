@@ -128,6 +128,17 @@ function currentDay() {
   return Math.min(31, Math.max(1, diff + 1));
 }
 
+function getLastCompletedDay() {
+  const doneDays = Object.keys(state.progress || {})
+    .map((key) => Number(key))
+    .filter((day) => state.progress[day]?.done);
+  return doneDays.length ? Math.max(...doneDays) : 0;
+}
+
+function getActiveDay() {
+  return Math.max(currentDay(), getLastCompletedDay() + 1);
+}
+
 function completedCount() {
   return Object.values(state.progress).filter((d) => d.done).length;
 }
@@ -527,7 +538,8 @@ function viewWelcome() {
 }
 
 function viewHome() {
-  const day = currentDay();
+  const activeDay = getActiveDay();
+  const day = activeDay;
   const today = readings.find((r) => r.day === day);
   const passages = today ? today.passages.join(", ") : "...";
   const pct = progressPct();
@@ -536,6 +548,7 @@ function viewHome() {
   const memVerse = todaysMemoryVerse();
   const todayMinutes = today ? estimateMinutes(today.passages) : 0;
   const dayNotes = notesForDay(day);
+  const dayStatus = day === currentDay() ? "Aujourd'hui" : "Lecture disponible";
 
   return `
     <div class="shell">
@@ -548,7 +561,7 @@ function viewHome() {
         <div class="home">
           <div class="card day-card">
             <div class="day-card__label">Jour <strong style="color:var(--primary);font-size:24px;font-weight:700;">${day}</strong> / 31</div>
-            <div class="day-card__sub" style="margin-top:14px;">Aujourd'hui</div>
+            <div class="day-card__sub" style="margin-top:14px;">${dayStatus}</div>
             <div class="day-card__passages">${passages}</div>
             <div class="day-card__meta">
               <span class="reading-time-badge">${I.clock} ${formatReadingTime(todayMinutes)}</span>
@@ -867,7 +880,6 @@ function viewStats() {
 function viewRewards() {
   const unlocked = unlockedBadges(state);
   const completedB = badges.filter((b) => b.category === "completed");
-  const specialB = badges.filter((b) => b.category === "special");
 
   function renderBadge(b) {
     const isUnlocked = unlocked.has(b.id);
@@ -888,9 +900,6 @@ function viewRewards() {
         <div class="rewards">
           <h3 class="rewards__section-title">Badges de progression</h3>
           <div class="badge-grid">${completedB.map(renderBadge).join("")}</div>
-
-          <h3 class="rewards__section-title">Badges spéciaux</h3>
-          <div class="badge-grid">${specialB.map(renderBadge).join("")}</div>
 
           <h3 class="rewards__section-title">Badges de fidélité (tours)</h3>
           <div class="badge-grid">
@@ -1583,7 +1592,7 @@ function viewHow() {
               <h3 class="how-section__title">Lectures accélérées</h3>
             </div>
             <p class="how-section__body" style="margin-bottom:10px;">
-              Tu as plus de temps un jour donné, ou tu veux rattraper un retard ? La <strong>lecture accélérée</strong> te permet de valider <strong>2, 3, 5, 10 ou 15 jours d'un coup</strong>.
+              Tu as plus de temps un jour donné, ou tu veux rattraper un retard ? La <strong>lecture accélérée</strong> te permet de valider plusieurs jours de lecture en une seule fois.
             </p>
             <ul class="how-steps">
               <li class="how-step">
@@ -1592,14 +1601,41 @@ function viewHow() {
               </li>
               <li class="how-step">
                 <span class="how-step__num">2</span>
-                <span class="how-step__text">Choisis le nombre de jours que tu veux valider (1 à 15).</span>
+                <span class="how-step__text">Choisis parmi les options : <strong>1, 2, 3, 5, 10 ou 15 jours</strong>.</span>
               </li>
               <li class="how-step">
                 <span class="how-step__num">3</span>
-                <span class="how-step__text">Lis les passages correspondants dans ta Bible, puis <strong>confirme</strong> la lecture.</span>
+                <span class="how-step__text">Lis les passages correspondants et confirme que tu as bien lu ces jours.</span>
               </li>
             </ul>
-            <div class="how-tip">⚡ La lecture accélérée ne remplace pas la qualité : prends le temps de bien comprendre la Parole avant de valider.</div>
+            <div class="how-tip">⚡ La lecture accélérée valide les jours sélectionnés avec un toast de confirmation.</div>
+          </div>
+
+          <!-- Versets à mémoriser -->
+          <div class="how-section">
+            <div class="how-section__header">
+              <div class="how-section__icon">${I.bookmark}</div>
+              <h3 class="how-section__title">Versets à mémoriser</h3>
+            </div>
+            <p class="how-section__body">
+              Tu peux enregistrer des versets que tu veux retenir pour un jour précis.
+              Le verset sélectionné s'affiche ensuite sur l'accueil le jour choisi, pour t'aider à le revoir et à le mémoriser.
+            </p>
+            <ul class="how-steps">
+              <li class="how-step">
+                <span class="how-step__num">1</span>
+                <span class="how-step__text">Ouvre l'onglet <strong>Versets à mémoriser</strong> depuis l'aide ou le menu.</span>
+              </li>
+              <li class="how-step">
+                <span class="how-step__num">2</span>
+                <span class="how-step__text">Ajoute la référence, le texte et la date de mémorisation.</span>
+              </li>
+              <li class="how-step">
+                <span class="how-step__num">3</span>
+                <span class="how-step__text">Le verset s'affichera automatiquement sur l'accueil le jour choisi.</span>
+              </li>
+            </ul>
+            <div class="how-tip">📌 C'est un moyen simple de garder un verset important présent dans ta journée de lecture.</div>
           </div>
 
           <!-- Surlignage et notes -->
