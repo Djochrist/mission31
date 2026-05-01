@@ -2472,6 +2472,9 @@ window.appInstalled && window.removeEventListener("appinstalled", window.appInst
 window.addEventListener("appinstalled", () => {
   document.querySelector(".install-banner")?.remove();
   setTimeout(hideInstallProgress, 800);
+  setTimeout(() => {
+    window.location.reload();
+  }, 500);
 });
 
 function showInstallProgress(done, total, label) {
