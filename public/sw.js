@@ -5,7 +5,7 @@
 
 // VERSION est remplacée au build par un identifiant unique (vite plugin),
 // ce qui force le navigateur à invalider l'ancien cache à chaque déploiement.
-const VERSION = "mission31-__BUILD_ID__";
+const VERSION = "mission31-v20260501";
 const IS_DEV = self.location.hostname === "localhost"
   || self.location.hostname === "127.0.0.1";
 
