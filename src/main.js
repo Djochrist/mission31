@@ -2817,6 +2817,9 @@ window.__accSelection = 1;
 render();
 attachInstallBanner(); // affiche la bannière même sans beforeinstallprompt (iOS, etc.)
 registerUser();        // synchronisation anonyme si Supabase est configuré (silencieux)
+if (isAppInstalled()) {
+  markInstalled();
+}
 scheduleReminders();   // planifie les notifications si déjà autorisées
 
 // Demande la permission de notification après 5 s si reminders.enabled
