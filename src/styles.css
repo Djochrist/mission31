@@ -1198,17 +1198,22 @@ html[data-theme="dark"] .notif-banner--err  { background: rgba(139,26,26,0.15); 
   gap: 10px;
   padding: 11px 14px;
   margin-top: 4px;
-  background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
+  background: var(--bg);
   color: #fff;
+  border: 1px solid rgba(247, 185, 85, 0.36);
   border-radius: 12px;
   text-decoration: none;
-  box-shadow: 0 4px 14px rgba(18,140,126,0.28);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 5px 18px rgba(10, 46, 46, 0.16);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
   cursor: pointer;
 }
 .group-cta:hover,
-.group-cta:active { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(18,140,126,0.36); }
-.group-cta svg { color: #fff; flex-shrink: 0; width: 20px; height: 20px; }
+.group-cta:active {
+  background: var(--bg-2);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(10, 46, 46, 0.22);
+}
+.group-cta svg { color: var(--accent); flex-shrink: 0; width: 20px; height: 20px; }
 .group-cta__text { flex: 1; font-size: 14px; font-weight: 600; line-height: 1.25; }
 .group-cta__text em { font-style: normal; font-weight: 700; opacity: 0.95; }
 .group-cta__arrow {
