@@ -2470,8 +2470,6 @@ function showNoteModal(day, chapterRef) {
 
 window.appInstalled && window.removeEventListener("appinstalled", window.appInstalled);
 window.addEventListener("appinstalled", () => {
-  const message = installMode === "update" ? "Application mise à jour !" : "Application installée !";
-  showToast(message);
   document.querySelector(".install-banner")?.remove();
   setTimeout(hideInstallProgress, 800);
 });
