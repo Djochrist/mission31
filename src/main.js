@@ -299,7 +299,7 @@ function showCelebration(day, isReRead = false, reReadCount = 0, unlockedBadge =
       <p class="celeb-body">${escapeHtml(body)}</p>
       ${unlockedBadge ? `
         <div class="celeb-badge-card">
-          <div class="celeb-badge-icon">${badgeIcons[unlockedBadge.icon] || I.trophy}</div>
+          <div class="celeb-badge-icon" style="background:${escapeHtml(unlockedBadge.color || "var(--primary)")}">${badgeIcons[unlockedBadge.icon] || I.trophy}</div>
           <div class="celeb-badge-name">${escapeHtml(unlockedBadge.name)}</div>
           <div class="celeb-badge-desc">${escapeHtml(unlockedBadge.desc)}</div>
         </div>
@@ -929,9 +929,10 @@ function viewRewards() {
 
   function renderBadge(b) {
     const isUnlocked = unlocked.has(b.id);
+    const iconStyle = isUnlocked && b.color ? `style="background:${escapeHtml(b.color)}"` : "";
     return `
       <div class="badge ${isUnlocked ? "" : "badge--locked"}">
-        <div class="badge__icon">${badgeIcons[b.icon] || I.trophy}</div>
+        <div class="badge__icon" ${iconStyle}>${badgeIcons[b.icon] || I.trophy}</div>
         <div class="badge__name">${b.name}</div>
         <div class="badge__desc">${b.desc}</div>
       </div>`;
