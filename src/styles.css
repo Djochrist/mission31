@@ -353,6 +353,38 @@ html[data-theme="dark"] .notif-banner--err  { background: rgba(139,26,26,0.15); 
   box-shadow: var(--shadow-card);
 }
 
+.install-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid rgba(247, 185, 85, 0.42);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+}
+.install-card__icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 13px;
+  color: var(--bg);
+  background: rgba(247, 185, 85, 0.2);
+}
+.install-card__title {
+  font-size: 14px;
+  font-weight: 700;
+}
+.install-card__sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
 .day-card { text-align: left; }
 .day-card__label {
   font-size: 13px;
@@ -629,6 +661,10 @@ html[data-theme="dark"] .notif-banner--err  { background: rgba(139,26,26,0.15); 
   align-items: center;
   gap: 6px;
 }
+.stat-tile__value--small {
+  font-size: 15px;
+  line-height: 1.25;
+}
 
 .visitor-counter {
   display: flex;
@@ -665,6 +701,12 @@ html[data-theme="dark"] .notif-banner--err  { background: rgba(139,26,26,0.15); 
   font-size: 28px;
   line-height: 1.1;
   font-weight: 800;
+}
+.visitor-counter__caption {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.62);
 }
 
 .encourage {
@@ -790,6 +832,14 @@ html[data-theme="dark"] .notif-banner--err  { background: rgba(139,26,26,0.15); 
   font-size: 13px;
   font-weight: 600;
   color: var(--primary-soft);
+}
+.share-card__link {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.72);
+  margin: 0 0 12px;
 }
 .share-actions {
   display: flex;
@@ -1321,6 +1371,31 @@ html[data-theme="dark"] .notif-banner--err  { background: rgba(139,26,26,0.15); 
    ============================================================ */
 .view--bible {
   padding-bottom: calc(var(--tab-h) + var(--safe-bottom) + 24px);
+}
+.view--reader-night {
+  background: #03191b;
+}
+.view--reader-night .bible-hint,
+.view--reader-night .bible-nav,
+.view--reader-night .bible-reader {
+  background: #0f2a2c;
+  color: #e6f1f1;
+  border-color: #1d4548;
+}
+.view--reader-night .bible-reader__text,
+.view--reader-night .bv__t {
+  color: #e6f1f1;
+}
+.view--reader-night .bible-reader__sub,
+.view--reader-night .bible-nav__pos {
+  color: #80999a;
+}
+.view--reader-night .bible-reader__title,
+.view--reader-night .bv__n {
+  color: #6ec9c9;
+}
+.view--reader-night .bible-nav__btn {
+  color: #e6f1f1;
 }
 .bible-reader {
   background: var(--surface);
@@ -2002,11 +2077,22 @@ html[data-theme="dark"] select {
 .celeb-overlay--visible .celeb-box { transform: translateY(0); }
 
 .celeb-emoji {
-  font-size: 56px;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0;
   line-height: 1;
-  margin-bottom: 12px;
-  display: block;
   animation: celeb-bounce 0.6s cubic-bezier(.22,1,.36,1) 0.1s both;
+}
+.celeb-emoji svg {
+  width: 30px;
+  height: 30px;
 }
 @keyframes celeb-bounce {
   0% { transform: scale(0.3); opacity: 0; }
@@ -2025,8 +2111,17 @@ html[data-theme="dark"] select {
   font-size: 14px;
   line-height: 1.6;
   color: var(--ink-faint);
-  margin: 0 0 18px;
+  margin: 0 0 12px;
   white-space: pre-line;
+}
+.celeb-verse {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--primary-strong);
+  background: rgba(45, 138, 138, 0.08);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
 }
 
 .celeb-divider {

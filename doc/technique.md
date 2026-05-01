@@ -424,7 +424,7 @@ Si vides → toute la logique Supabase est désactivée silencieusement.
 
 - `registerUser(clientId)` — insère la ligne anonyme à la première ouverture.
 - `syncProgress(daysCompleted)` — upsert avec debounce de 5 secondes.
-- `fetchGlobalStats()` — appelle la RPC `mission31_get_stats`, utilisée dans `stats` pour afficher le compteur visiteurs.
+- `fetchGlobalStats()` — appelle la RPC `mission31_get_stats` si une vue serveur doit réutiliser les agrégats.
 
 ### 8.3. Schéma SQL
 

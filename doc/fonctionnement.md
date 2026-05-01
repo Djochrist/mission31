@@ -100,8 +100,9 @@ Vue d'ensemble des **31 jours**.
 - Progression globale (%, jours validés / 31)
 - Streak actuel et plus longue série
 - Jours gagnés (avance sur le rythme prévu)
-- Compteur persistant des visiteurs du site (si Supabase est configuré)
-- Date estimée de fin
+- Temps total estimé et temps restant estimé
+- Compteur local d'ouvertures, stocké sur l'appareil sans base de données
+- Reprise de la dernière lecture ouverte
 
 ---
 

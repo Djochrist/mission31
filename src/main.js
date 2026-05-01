@@ -5,7 +5,7 @@
 import appIconUrl from "./assets/icon-512.png";
 import { readings, passagesText } from "./data/readings.js";
 import { badges, unlockedBadges } from "./data/badges.js";
-import { registerUser, syncProgress, fetchGlobalStats, supabaseEnabled } from "./supabase.js";
+import { registerUser, syncProgress } from "./supabase.js";
 import { CELEBRATION, REFLECTION_QUESTION, REREAD_MESSAGES, COMPLETION_MESSAGES, TOUR_BADGES, TOASTS } from "./data/messages.js";
 import {
   loadBible,
@@ -21,6 +21,7 @@ import {
 // Liens & contacts (à un seul endroit pour éviter la duplication)
 const CONTACT_EMAIL = "djochristkfreelance@gmail.com";
 const WHATSAPP_GROUP_URL = "https://chat.whatsapp.com/I3ofVHRDGPlEEmCtzSSsxV?mode=gi_t";
+const APP_URL = "https://mission31.vercel.app";
 
 // ------------------------------------------------------------
 // State management (localStorage backed)
@@ -36,8 +37,11 @@ const defaultState = {
   lastSyncedAt: null,          // ISO date du dernier sync réussi (multi-appareils)
   memoryVerses: [],            // [{ id, date: "YYYY-MM-DD", ref, text, addedAt }]
   theme: "auto",               // "auto" | "light" | "dark"
+  readerMode: "normal",        // "normal" | "night"
   notes: [],                   // [{ id, dayRef, chapterRef, title, content, createdAt, updatedAt }]
   highlights: {},              // { "bookId-chapter-verseIdx": "yellow"|"green"|"blue"|"pink" }
+  lastReading: null,           // { day, i, label, scrollY, updatedAt }
+  localVisits: null,           // compteur local, sans backend
 };
 
 function loadState() {
@@ -54,6 +58,9 @@ function loadState() {
       highlights: (parsed.highlights && typeof parsed.highlights === "object") ? parsed.highlights : {},
       reReads: (parsed.reReads && typeof parsed.reReads === "object") ? parsed.reReads : {},
       completionCount: typeof parsed.completionCount === "number" ? parsed.completionCount : 0,
+      readerMode: ["normal", "night"].includes(parsed.readerMode) ? parsed.readerMode : "normal",
+      lastReading: (parsed.lastReading && typeof parsed.lastReading === "object") ? parsed.lastReading : null,
+      localVisits: (parsed.localVisits && typeof parsed.localVisits === "object") ? parsed.localVisits : null,
     };
   } catch {
     return { ...defaultState };
@@ -65,6 +72,17 @@ function saveState() {
 }
 
 let state = loadState();
+
+function registerLocalVisit() {
+  const now = new Date().toISOString();
+  const current = state.localVisits && typeof state.localVisits === "object" ? state.localVisits : {};
+  state.localVisits = {
+    count: Math.max(0, Number(current.count || 0)) + 1,
+    firstAt: current.firstAt || now,
+    lastAt: now,
+  };
+  saveState();
+}
 
 // ------------------------------------------------------------
 // Date helpers (basées sur la date réelle du téléphone)
@@ -195,6 +213,62 @@ function totalMissionMinutes() {
   return readings.reduce((sum, r) => sum + estimateMinutes(r.passages), 0);
 }
 
+function remainingMissionMinutes() {
+  return readings.reduce((sum, r) => {
+    if (state.progress[r.day]?.done) return sum;
+    return sum + estimateMinutes(r.passages);
+  }, 0);
+}
+
+function validLastReading() {
+  const lr = state.lastReading;
+  if (!lr || typeof lr !== "object") return null;
+  const day = Number(lr.day);
+  const idx = Number(lr.i || 0);
+  if (!day || day < 1 || day > 31) return null;
+  const reading = readings.find((r) => r.day === day);
+  if (!reading) return null;
+  const queue = expandPassages(reading.passages);
+  if (!queue.length || idx < 0 || idx >= queue.length) return null;
+  const label = lr.label || formatChapterLabel(queue[idx].name, queue[idx].chapter);
+  return { day, i: idx, label, scrollY: Math.max(0, Number(lr.scrollY || 0)) };
+}
+
+function saveLastReading(day, idx, label, scrollY = window.scrollY || 0) {
+  if (!day || day < 1 || day > 31) return;
+  state.lastReading = {
+    day,
+    i: Math.max(0, Number(idx || 0)),
+    label,
+    scrollY: Math.max(0, Math.round(Number(scrollY || 0))),
+    updatedAt: new Date().toISOString(),
+  };
+  saveState();
+}
+
+function exportUserData() {
+  try {
+    const payload = {
+      app: "Mission 31",
+      exportedAt: new Date().toISOString(),
+      version: 1,
+      state,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mission31-sauvegarde-${todayISO()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast("Sauvegarde exportée.");
+  } catch {
+    showToast("Export impossible sur ce navigateur.");
+  }
+}
+
 // ------------------------------------------------------------
 // Notes helpers
 // ------------------------------------------------------------
@@ -294,9 +368,10 @@ function showCelebration(day, isReRead = false, reReadCount = 0, unlockedBadge =
           `<span class="celeb-star" style="--i:${i}">✦</span>`
         ).join("")}
       </div>
-      <div class="celeb-emoji">🎉</div>
+      <div class="celeb-emoji">${I.checkBig}</div>
       <h2 class="celeb-title">${escapeHtml(title)}</h2>
       <p class="celeb-body">${escapeHtml(body)}</p>
+      <p class="celeb-verse">Ta parole est une lampe à mes pieds, et une lumière sur mon sentier.</p>
       ${unlockedBadge ? `
         <div class="celeb-badge-card">
           <div class="celeb-badge-icon" style="background:${escapeHtml(unlockedBadge.color || "var(--primary)")}">${badgeIcons[unlockedBadge.icon] || I.trophy}</div>
@@ -320,7 +395,7 @@ function showCelebration(day, isReRead = false, reReadCount = 0, unlockedBadge =
           Lire le Jour ${nextDay} <span style="font-size:12px;opacity:.7;">${escapeHtml(nextPassages)}</span>
         </button>` : ""}
         <button class="btn btn--ghost celeb-btn--continue" data-celeb-action="continue">
-          Retour à l'accueil
+          Retour au planning
         </button>
       </div>
     </div>`;
@@ -330,7 +405,7 @@ function showCelebration(day, isReRead = false, reReadCount = 0, unlockedBadge =
 
   function dismiss() {
     overlay.classList.remove("celeb-overlay--visible");
-    setTimeout(() => { overlay.remove(); render(); navigate("home"); }, 350);
+    setTimeout(() => { overlay.remove(); render(); navigate("planning"); }, 350);
   }
 
   overlay.querySelector("[data-celeb-action='continue']").addEventListener("click", dismiss);
@@ -338,7 +413,7 @@ function showCelebration(day, isReRead = false, reReadCount = 0, unlockedBadge =
   overlay.querySelector("[data-celeb-action='notes']").addEventListener("click", () => {
     overlay.remove();
     render();
-    navigate("home");
+    navigate("planning");
     setTimeout(() => showNoteModal(day, ""), 100);
   });
 
@@ -459,6 +534,17 @@ function navigate(r) {
 window.addEventListener("hashchange", render);
 window.addEventListener("online", render);
 window.addEventListener("offline", render);
+
+let bibleScrollSaveTimer = null;
+window.addEventListener("scroll", () => {
+  const route = getRoute();
+  if (route.name !== "bible") return;
+  const day = parseInt(route.params.day, 10) || currentDay();
+  const idx = Math.max(0, parseInt(route.params.i, 10) || 0);
+  const title = document.querySelector(".bible-reader__title")?.textContent || state.lastReading?.label || "Lecture";
+  clearTimeout(bibleScrollSaveTimer);
+  bibleScrollSaveTimer = setTimeout(() => saveLastReading(day, idx, title, window.scrollY || 0), 250);
+}, { passive: true });
 
 // ------------------------------------------------------------
 // Icons (inline SVG)
@@ -598,6 +684,8 @@ function viewHome() {
   const todayMinutes = today ? estimateMinutes(today.passages) : 0;
   const dayNotes = notesForDay(day);
   const dayStatus = day === currentDay() ? "Aujourd'hui" : "Lecture disponible";
+  const resume = validLastReading();
+  const mainCta = resume ? "Continuer ma lecture" : isTodayDone ? "Relire aujourd'hui" : "Lire aujourd'hui";
 
   return `
     <div class="shell">
@@ -609,9 +697,9 @@ function viewHome() {
       <main class="view">
         <div class="home">
           <div class="card day-card">
-            <div class="day-card__label">Jour <strong style="color:var(--primary);font-size:24px;font-weight:700;">${day}</strong> / 31</div>
+            <div class="day-card__label">Jour <strong style="color:var(--primary);font-size:24px;font-weight:700;">${day}</strong> / 31 · ${escapeHtml(passages)}</div>
             <div class="day-card__sub" style="margin-top:14px;">${dayStatus}</div>
-            <div class="day-card__passages">${passages}</div>
+            <div class="day-card__passages">${resume ? `Reprendre à ${escapeHtml(resume.label)}` : escapeHtml(passages)}</div>
             <div class="day-card__meta">
               <span class="reading-time-badge">${I.clock} ${formatReadingTime(todayMinutes)}</span>
               ${dayNotes.length > 0 ? `<span class="notes-badge" data-nav="notes?day=${day}">${I.pen} ${dayNotes.length} note${dayNotes.length > 1 ? "s" : ""}</span>` : ""}
@@ -635,11 +723,21 @@ function viewHome() {
                     </div>
                     <button class="btn btn--ghost" data-nav="bible?day=${day}&i=0">${I.bookOpen} Relire aujourd'hui</button>`;
                 }
-                return `<button class="btn" data-nav="bible?day=${day}&i=0">${I.bookOpen} ${isTodayDone ? "Relire aujourd'hui" : "Lire aujourd'hui"}</button>`;
+                return `<button class="btn" data-nav="${resume ? `bible?day=${resume.day}&i=${resume.i}&resume=1` : `bible?day=${day}&i=0`}">${I.bookOpen} ${mainCta}</button>`;
               })()}
               <button class="btn btn--ghost" data-nav="reading">Voir le détail</button>
             </div>
           </div>
+
+          ${!isAppInstalled() ? `
+            <div class="install-card" data-action="install">
+              <div class="install-card__icon">${I.install}</div>
+              <div class="install-card__body">
+                <div class="install-card__title">Installer Mission 31</div>
+                <div class="install-card__sub">Accès rapide et lecture hors ligne.</div>
+              </div>
+            </div>
+          ` : ""}
 
           ${memVerse ? `
             <div class="card memory-today">
@@ -904,18 +1002,28 @@ function viewStats() {
               <div class="stat-tile__value">${formatReadingTime(totalMissionMinutes())}</div>
             </div>
             <div class="stat-tile">
+              <div class="stat-tile__label">${I.clock} Temps restant estimé</div>
+              <div class="stat-tile__value">${formatReadingTime(remainingMissionMinutes())}</div>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-tile">
               <div class="stat-tile__label">${I.pen} Mes notes</div>
               <div class="stat-tile__value stat-tile__value--link" data-nav="notes">${(state.notes || []).length}</div>
+            </div>
+            <div class="stat-tile">
+              <div class="stat-tile__label">${I.bookOpen} Reprise</div>
+              <div class="stat-tile__value stat-tile__value--small">${validLastReading() ? escapeHtml(validLastReading().label) : "Aucune"}</div>
             </div>
           </div>
 
           <div class="visitor-counter" aria-live="polite">
             <div class="visitor-counter__icon">${I.users}</div>
             <div>
-              <div class="visitor-counter__label">Visiteurs du site</div>
-              <div class="visitor-counter__value" id="visitor-count">
-                ${supabaseEnabled ? "..." : "Indisponible"}
-              </div>
+              <div class="visitor-counter__label">Ouvertures locales de Mission 31</div>
+              <div class="visitor-counter__value">${Number(state.localVisits?.count || 1).toLocaleString("fr-FR")}</div>
+              <div class="visitor-counter__caption">Compteur front sécurisé, stocké uniquement sur cet appareil.</div>
             </div>
           </div>
 
@@ -985,6 +1093,8 @@ function viewRewards() {
 
 function viewShare() {
   const day = currentDay();
+  const reading = readings.find((r) => r.day === getActiveDay());
+  const passages = reading ? reading.passages.join(", ") : "Nouveau Testament";
   return `
     <div class="shell">
       ${topbar({
@@ -997,7 +1107,8 @@ function viewShare() {
             <div class="share-card__icon">${I.bible}</div>
             <h2 class="share-card__title">MISSION 31</h2>
             <div class="share-card__day">JOUR <strong>${day}</strong> / 31</div>
-            <p class="share-card__msg">Je suis la mission et<br/>je lis le Nouveau Testament<br/>en 31 jours !</p>
+            <p class="share-card__msg">Je lis ${escapeHtml(passages)}<br/>dans le Nouveau Testament.</p>
+            <p class="share-card__link">${APP_URL}</p>
             <span class="share-card__tag">#Mission31</span>
           </div>
 
@@ -1203,17 +1314,6 @@ function viewCompletion() {
     </div>`;
 }
 
-function renderVisitorCount(data) {
-  const counter = document.getElementById("visitor-count");
-  if (!counter) return;
-  if (!data) {
-    counter.textContent = "Indisponible";
-    return;
-  }
-  const total_users = Number(data.total_users || 0);
-  counter.textContent = total_users.toLocaleString("fr-FR");
-}
-
 // ============================================================
 // Bible reader (Louis Segond 1910 · NT)
 // ============================================================
@@ -1239,6 +1339,7 @@ function viewBible(params) {
   const idx = Math.max(0, Math.min(queue.length - 1, parseInt(params.i, 10) || 0));
   const day = parseInt(params.day, 10) || currentDay();
   const isFreeRead = !!(params.b && params.c);
+  const night = state.readerMode === "night";
 
   const current = queue[idx];
   const title = current ? formatChapterLabel(current.name, current.chapter) : "Lecture";
@@ -1250,10 +1351,11 @@ function viewBible(params) {
         title: title,
         leftAction: `<button class="topbar__btn" data-action="back">${I.back}</button>`,
         rightActions: [
+          `<button class="topbar__btn" data-action="reader-mode-toggle" title="${night ? "Mode normal" : "Mode soir"}">${night ? I.sun : I.moon}</button>`,
           `<button class="topbar__btn" data-action="open-note-modal" data-day="${day}" data-chapter="${escapeHtml(chapterRef)}" title="Prendre une note">${I.pen}</button>`,
         ],
       })}
-      <main class="view view--bible">
+      <main class="view view--bible ${night ? "view--reader-night" : ""}">
         <div class="bible-hint">${I.highlighter} Appuie sur un verset pour le surligner ou prendre une note.</div>
         <div class="bible-reader" id="bibleReader">
           <div class="bible-reader__loading">${I.bookOpen} Chargement du texte...</div>
@@ -1297,6 +1399,7 @@ function renderBibleContent(params) {
   const idx = Math.max(0, Math.min(queue.length - 1, parseInt(params.i, 10) || 0));
   const item = queue[idx];
   const verseDay = parseInt(params.day, 10) || currentDay();
+  const shouldResume = params.resume === "1";
 
   loadBible().then((bible) => {
     const verses = getChapterVerses(bible, item.id, item.chapter);
@@ -1307,6 +1410,7 @@ function renderBibleContent(params) {
     const heading = SINGLE_CHAPTER_BOOKS.has(item.name) ? item.name : `${item.name} ${item.chapter}`;
     const chapterLabel = formatChapterLabel(item.name, item.chapter);
     const highlights = state.highlights || {};
+    saveLastReading(verseDay, idx, chapterLabel, shouldResume && state.lastReading?.day === verseDay && Number(state.lastReading?.i || 0) === idx ? state.lastReading.scrollY : 0);
     container.innerHTML = `
       <h1 class="bible-reader__title">${heading}</h1>
       <p class="bible-reader__sub">Louis Segond 1910</p>
@@ -1321,7 +1425,9 @@ function renderBibleContent(params) {
           </p>`;
         }).join("")}
       </div>`;
-    window.scrollTo({ top: 0 });
+    const saved = validLastReading();
+    const scrollY = shouldResume && saved && saved.day === verseDay && saved.i === idx ? saved.scrollY : 0;
+    window.scrollTo({ top: scrollY || 0 });
   }).catch(() => {
     container.innerHTML = `
       <p class="bible-reader__empty">
@@ -1732,6 +1838,12 @@ function viewSettings() {
           </div>
 
           <div class="card">
+            <h3 class="settings__section-title">${I.download} Sauvegarde</h3>
+            <p class="settings__section-sub">Exporte ta progression, tes notes, tes versets et tes surlignages dans un fichier JSON.</p>
+            <button class="btn btn--ghost" data-action="export-data">${I.download} Exporter mes données</button>
+          </div>
+
+          <div class="card">
             <h3 class="settings__section-title">${I.mail} Contact &amp; communauté</h3>
             <p class="settings__section-sub">Une question, un bug ou une suggestion ? Contacte le développeur ou rejoins la communauté.</p>
             <a class="settings-contact-row" href="mailto:${CONTACT_EMAIL}?subject=Mission%2031">
@@ -1805,9 +1917,6 @@ function render() {
   window.scrollTo({ top: 0 });
 
   // Hooks après-rendu (chargements asynchrones par vue)
-  if (route === "stats" && supabaseEnabled) {
-    fetchGlobalStats().then(renderVisitorCount);
-  }
   if (route === "bible") {
     renderBibleContent(r.params || {});
   }
@@ -2042,7 +2151,7 @@ function handleAction(actionEl) {
       break;
     }
     case "share-whatsapp": {
-      const txt = encodeURIComponent(`Je suis la mission #Mission31 ! Jour ${currentDay()}/31. Je lis le Nouveau Testament en 31 jours. Rejoins-moi 🙏`);
+      const txt = encodeURIComponent(`Je suis la mission #Mission31 ! Jour ${currentDay()}/31. Je lis le Nouveau Testament en 31 jours. Rejoins-moi : ${APP_URL}`);
       window.open(`https://wa.me/?text=${txt}`, "_blank");
       break;
     }
@@ -2150,6 +2259,16 @@ function handleAction(actionEl) {
         applyTheme();
         render();
       }
+      break;
+    }
+    case "reader-mode-toggle": {
+      state.readerMode = state.readerMode === "night" ? "normal" : "night";
+      saveState();
+      render();
+      break;
+    }
+    case "export-data": {
+      exportUserData();
       break;
     }
     // ------------------------------------------------------
@@ -2521,7 +2640,7 @@ function fireReminder() {
 // ------------------------------------------------------------
 async function shareWithImage(options = {}) {
   const day = currentDay();
-  const text = options.text || `Je suis la mission #Mission31 ! Jour ${day}/31. Je lis le Nouveau Testament en 31 jours.`;
+  const text = options.text || `Je suis la mission #Mission31 ! Jour ${day}/31. Je lis le Nouveau Testament en 31 jours. ${APP_URL}`;
   let file = null;
   try {
     const blob = await renderShareImage(day);
@@ -2542,7 +2661,7 @@ async function shareWithImage(options = {}) {
   }
   if (navigator.share) {
     try {
-      await navigator.share({ title: "Mission 31", text, url: location.href });
+      await navigator.share({ title: "Mission 31", text, url: APP_URL });
       return;
     } catch (err) {
       if (err && err.name === "AbortError") return;
@@ -2550,7 +2669,7 @@ async function shareWithImage(options = {}) {
   }
   // Fallback ultime : copier dans le presse-papier
   try {
-    await navigator.clipboard.writeText(`${text} ${location.href}`);
+    await navigator.clipboard.writeText(`${text} ${APP_URL}`);
     showToast("Lien copié dans le presse-papier !");
   } catch {
     showToast("Partage indisponible.");
@@ -2627,10 +2746,14 @@ function renderShareImage(day) {
     ];
     lines.forEach((ln, i) => ctx.fillText(ln, W / 2, 460 + i * 42));
 
+    ctx.fillStyle = "rgba(255,255,255,0.78)";
+    ctx.font = "500 24px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+    ctx.fillText(APP_URL.replace(/^https?:\/\//, ""), W / 2, 600);
+
     // Tag
     ctx.fillStyle = "#f7b955";
     ctx.font = "700 30px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
-    ctx.fillText("#Mission31", W / 2, 640);
+    ctx.fillText("#Mission31", W / 2, 655);
 
     canvas.toBlob((b) => resolve(b), "image/png");
   });
@@ -2667,9 +2790,10 @@ if ("serviceWorker" in navigator) {
 // Boot
 // ------------------------------------------------------------
 window.__accSelection = 1;
+registerLocalVisit();
 render();
 attachInstallBanner(); // affiche la bannière même sans beforeinstallprompt (iOS, etc.)
-registerUser();        // compte cet appareil dans le compteur visiteurs (silencieux)
+registerUser();        // synchronisation anonyme si Supabase est configuré (silencieux)
 scheduleReminders();   // planifie les notifications si déjà autorisées
 
 // Demande la permission de notification après 5 s si reminders.enabled
