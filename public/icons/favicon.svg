@@ -1,10 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <rect width="64" height="64" rx="14" fill="#0a2e2e"/>
-  <g fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M14 48 A5 5 0 0 1 19 43 H49"/>
-    <path d="M19 12 H49 V52 H19 A5 5 0 0 1 14 47 V17 A5 5 0 0 1 19 12 z"/>
-    <line x1="32" y1="20" x2="32" y2="36"/>
-    <line x1="26" y1="28" x2="38" y2="28"/>
-  </g>
-  <text x="32" y="60" text-anchor="middle" fill="rgba(255,255,255,0.75)" font-family="sans-serif" font-size="6" font-weight="300" letter-spacing="2">M31</text>
+  <path d="M18 14h28a4 4 0 0 1 4 4v28a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4V18a4 4 0 0 1 4-4Z" fill="#ffffff"/>
+  <path d="M18 16h8v28h-8a2 2 0 0 1-2-2V18a2 2 0 0 1 2-2Z" fill="#f7b955"/>
+  <path d="M26 26h16M26 34h16" stroke="#0a2e2e" stroke-width="3" stroke-linecap="round"/>
+  <path d="M18 46h28" stroke="#0a2e2e" stroke-width="3" stroke-linecap="round"/>
 </svg>
