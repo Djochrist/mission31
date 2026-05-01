@@ -73,6 +73,7 @@ let state = loadState();
 let globalStats = null;
 let globalStatsLoading = false;
 let globalStatsLoadedAt = 0;
+let globalStatsUnavailable = false;
 
 async function refreshGlobalStats() {
   if (globalStatsLoading || Date.now() - globalStatsLoadedAt < 60000) return;
@@ -80,12 +81,14 @@ async function refreshGlobalStats() {
   const stats = await fetchGlobalStats();
   globalStatsLoading = false;
   if (!stats) {
-    globalStats = { total_users: null, installed_users: null };
+    globalStats = null;
+    globalStatsUnavailable = true;
     globalStatsLoadedAt = Date.now();
     if (getRoute().name === "stats") render();
     return;
   }
   globalStats = stats;
+  globalStatsUnavailable = false;
   globalStatsLoadedAt = Date.now();
   if (getRoute().name === "stats") render();
 }
@@ -958,9 +961,19 @@ function viewStats() {
   const offset = C - (pct / 100) * C;
   const hasGlobalVisitors = Number.isFinite(Number(globalStats?.total_users));
   const hasInstalledUsers = Number.isFinite(Number(globalStats?.installed_users));
-  const globalVisitors = hasGlobalVisitors ? Number(globalStats.total_users) : null;
-  const installedUsers = hasInstalledUsers ? Number(globalStats.installed_users) : null;
-  const globalCaption = hasGlobalVisitors ? "" : "Données indisponibles";
+  const globalVisitors = hasGlobalVisitors ? Math.max(Number(globalStats.total_users), 1) : null;
+  const installedUsers = hasInstalledUsers
+    ? Math.max(Number(globalStats.installed_users), isAppInstalled() ? 1 : 0)
+    : null;
+  const unavailableLabel = "Données indisponibles";
+  const loadingLabel = "...";
+  const globalVisitorsLabel = hasGlobalVisitors
+    ? globalVisitors.toLocaleString("fr-FR")
+    : globalStatsUnavailable ? unavailableLabel : loadingLabel;
+  const installedUsersLabel = hasInstalledUsers
+    ? installedUsers.toLocaleString("fr-FR")
+    : globalStatsUnavailable ? unavailableLabel : loadingLabel;
+  const globalCaption = globalStatsUnavailable ? unavailableLabel : "";
   return `
     <div class="shell">
       ${topbar({ title: "Stats" })}
@@ -1035,11 +1048,11 @@ function viewStats() {
               <div class="visitor-counter__grid">
                 <div>
                   <div class="visitor-counter__label">Personnes au courant</div>
-                  <div class="visitor-counter__value">${hasGlobalVisitors ? globalVisitors.toLocaleString("fr-FR") : "..."}</div>
+                  <div class="visitor-counter__value">${globalVisitorsLabel}</div>
                 </div>
                 <div>
                   <div class="visitor-counter__label">Participants installés</div>
-                  <div class="visitor-counter__value">${hasInstalledUsers ? installedUsers.toLocaleString("fr-FR") : "..."}</div>
+                  <div class="visitor-counter__value">${installedUsersLabel}</div>
                 </div>
               </div>
               ${globalCaption ? `<div class="visitor-counter__caption">${globalCaption}</div>` : ""}
@@ -1145,7 +1158,6 @@ function viewHelp() {
   const installed = isAppInstalled();
   const items = [
     { icon: I.bookmark,  title: "Versets à mémoriser", sub: "Programme et révise tes versets", nav: "memory", accent: true },
-    { icon: I.fileText,  title: "Mes notes", sub: `${(state.notes || []).length} note${(state.notes || []).length !== 1 ? "s" : ""} enregistrée${(state.notes || []).length !== 1 ? "s" : ""}`, nav: "notes", accent: true },
     { icon: I.settings,  title: "Paramètres", sub: "Date de début, mode sombre, rappels, contact", nav: "settings" },
     { icon: I.question,  title: "Comment fonctionne Mission 31 ?", sub: "Guide complet, navigation par jour, rappels…", nav: "how" },
     { icon: I.bellSmall, title: "Notifications & rappels", nav: "reminders" },
@@ -1160,20 +1172,6 @@ function viewHelp() {
       icon: I.checkBig.replace('width="42"', 'width="20"').replace('height="42"', 'height="20"'),
       title: "Application installée",
       sub: "Mission 31 fonctionne déjà comme une app native",
-    },
-    {
-      icon: I.whatsapp,
-      title: "Rejoindre le groupe WhatsApp",
-      sub: "Échange et encouragements avec la communauté",
-      href: WHATSAPP_GROUP_URL,
-      target: "_blank",
-      accent: true,
-    },
-    {
-      icon: I.mail,
-      title: "Contact développeur",
-      sub: CONTACT_EMAIL,
-      href: `mailto:${CONTACT_EMAIL}?subject=Mission%2031`,
     },
   ].filter(Boolean);
   return `
@@ -1759,7 +1757,7 @@ function viewHow() {
             </div>
             <p class="how-section__body">
               Dans le lecteur de Bible intégré, <strong>appuie sur n'importe quel verset</strong> pour l'annoter ou le surligner en jaune, vert, bleu ou rose.
-              Tes notes sont organisées par jour de lecture et accessibles depuis l'onglet Aide → Mes notes.
+              Tes notes sont organisées par jour de lecture et restent accessibles depuis les raccourcis du lecteur et des statistiques.
             </p>
           </div>
 
@@ -2816,7 +2814,13 @@ if ("serviceWorker" in navigator) {
 window.__accSelection = 1;
 render();
 attachInstallBanner(); // affiche la bannière même sans beforeinstallprompt (iOS, etc.)
-registerUser();        // synchronisation anonyme si Supabase est configuré (silencieux)
+registerUser(completedCount()).then((registered) => {
+  // Après un enregistrement confirmé, on force les stats à se relire une fois.
+  if (registered && getRoute().name === "stats") {
+    globalStatsLoadedAt = 0;
+    refreshGlobalStats();
+  }
+}); // synchronisation anonyme si Supabase est configuré (silencieux)
 if (isAppInstalled()) {
   markInstalled();
 }

@@ -35,36 +35,31 @@ export function clientId() {
 
 // Enregistre l'utilisateur dès le premier lancement de l'app.
 const REG_KEY = "mission31:registered:v1";
-export async function registerUser() {
-  if (!supabase) return;
-  if (localStorage.getItem(REG_KEY) === "1") {
-    // Déjà enregistré : on met juste à jour l'activité.
-    try {
-      await supabase
-        .from("mission31_users")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("client_id", clientId());
-    } catch (err) {
-      console.warn("Supabase touch failed:", err);
-    }
-    return;
-  }
+export async function registerUser(daysCompleted = 0) {
+  if (!supabase) return false;
+  const normalizedCompleted = Math.max(0, Math.min(31, Number(daysCompleted) || 0));
+
   try {
     const { error } = await supabase
       .from("mission31_users")
       .upsert(
         {
           client_id: clientId(),
-          days_completed: 0,
-          completed: false,
+          days_completed: normalizedCompleted,
+          completed: normalizedCompleted >= 31,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "client_id", ignoreDuplicates: true },
+        { onConflict: "client_id" },
       );
-    if (!error) localStorage.setItem(REG_KEY, "1");
-    else console.warn("Supabase register failed:", error);
+    if (error) {
+      console.warn("Supabase register failed:", error);
+      return false;
+    }
+    localStorage.setItem(REG_KEY, "1");
+    return true;
   } catch (err) {
     console.warn("Supabase register failed:", err);
+    return false;
   }
 }
 
@@ -115,7 +110,7 @@ export async function fetchGlobalStats() {
   try {
     const { data, error } = await supabase.rpc("mission31_get_stats");
     if (error) throw error;
-    return data;
+    return Array.isArray(data) ? data[0] : data;
   } catch (err) {
     console.warn("Supabase stats failed:", err);
     return null;
