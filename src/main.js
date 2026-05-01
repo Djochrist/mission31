@@ -976,8 +976,8 @@ function viewStats() {
   const globalVisitorsValueClass = hasGlobalVisitors ? "" : " visitor-counter__value--muted";
   const installedUsersValueClass = hasInstalledUsers ? "" : " visitor-counter__value--muted";
   const globalCaption = globalStatsUnavailable
-    ? "Les chiffres de la communauté ne sont pas accessibles pour le moment."
-    : "Ces compteurs viennent de Supabase et se mettent à jour pour tous les visiteurs.";
+    ? ""
+    : "Ces chiffres sont partagés entre tous les participants. Tu ne marches pas seul(e).";
   return `
     <div class="shell">
       ${topbar({ title: "Stats" })}
@@ -1043,11 +1043,11 @@ function viewStats() {
             <div class="visitor-counter__body">
               <div class="visitor-counter__grid">
                 <div>
-                  <div class="visitor-counter__label">Visiteurs du site</div>
+                  <div class="visitor-counter__label">Ont entendu parler de Mission 31</div>
                   <div class="visitor-counter__value${globalVisitorsValueClass}">${globalVisitorsLabel}</div>
                 </div>
                 <div>
-                  <div class="visitor-counter__label">Installations de l'app</div>
+                  <div class="visitor-counter__label">Sont dans la mission</div>
                   <div class="visitor-counter__value${installedUsersValueClass}">${installedUsersLabel}</div>
                 </div>
               </div>

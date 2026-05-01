@@ -19,29 +19,29 @@ function cleanEnv(value) {
 
 function isValidSupabaseUrl(value) {
   try {
-    const url = new URL(value);
-    return url.protocol === "https:" && url.hostname.endsWith(".supabase.co");
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" && parsed.hostname.endsWith(".supabase.co");
   } catch {
     return false;
   }
 }
 
-const URL = cleanEnv(
+const SUPABASE_URL = cleanEnv(
   import.meta.env.VITE_SUPABASE_URL ||
   import.meta.env.NEXT_PUBLIC_SUPABASE_URL
 );
 
-const KEY = cleanEnv(
+const SUPABASE_KEY = cleanEnv(
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 );
 
-export const supabaseEnabled = Boolean(URL && KEY && isValidSupabaseUrl(URL));
+export const supabaseEnabled = Boolean(SUPABASE_URL && SUPABASE_KEY && isValidSupabaseUrl(SUPABASE_URL));
 
 export const supabase = supabaseEnabled
-  ? createClient(URL, KEY, {
+  ? createClient(SUPABASE_URL, SUPABASE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     })
   : null;
