@@ -1,7 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <rect width="64" height="64" rx="16" fill="#0a2e2e"/>
-  <path d="M16 14h32a6 6 0 0 1 6 6v28a6 6 0 0 1-6 6H16a6 6 0 0 1-6-6V20a6 6 0 0 1 6-6Z" fill="#ffffff"/>
-  <path d="M16 16h10v32H16a4 4 0 0 1-4-4V20a4 4 0 0 1 4-4Z" fill="#f7b955"/>
-  <path d="M28 22h14M28 30h14M28 38h10" stroke="#0a2e2e" stroke-width="4" stroke-linecap="round"/>
-  <path d="M34 18v10M30 22h8" stroke="#0a2e2e" stroke-width="3" stroke-linecap="round"/>
+  <path d="M17 13h30a6 6 0 0 1 6 6v30a6 6 0 0 1-6 6H17a6 6 0 0 1-6-6V19a6 6 0 0 1 6-6Z" fill="#ffffff"/>
+  <rect x="17" y="13" width="12" height="34" rx="4" fill="#f7b955"/>
+  <path d="M33 21h14" stroke="#0a2e2e" stroke-width="4" stroke-linecap="round"/>
+  <path d="M33 31h12" stroke="#0a2e2e" stroke-width="4" stroke-linecap="round"/>
+  <path d="M33 41h8" stroke="#0a2e2e" stroke-width="4" stroke-linecap="round"/>
+  <path d="M35 18v12" stroke="#0a2e2e" stroke-width="4" stroke-linecap="round"/>
+  <path d="M41 18v12" stroke="#0a2e2e" stroke-width="4" stroke-linecap="round"/>
 </svg>
