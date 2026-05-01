@@ -5,7 +5,7 @@
 import appIconUrl from "./assets/icon-512.png";
 import { readings, passagesText } from "./data/readings.js";
 import { badges, unlockedBadges } from "./data/badges.js";
-import { registerUser, syncProgress } from "./supabase.js";
+import { fetchGlobalStats, markInstalled, registerUser, syncProgress } from "./supabase.js";
 import { CELEBRATION, REFLECTION_QUESTION, REREAD_MESSAGES, COMPLETION_MESSAGES, TOUR_BADGES, TOASTS } from "./data/messages.js";
 import {
   loadBible,
@@ -41,7 +41,6 @@ const defaultState = {
   notes: [],                   // [{ id, dayRef, chapterRef, title, content, createdAt, updatedAt }]
   highlights: {},              // { "bookId-chapter-verseIdx": "yellow"|"green"|"blue"|"pink" }
   lastReading: null,           // { day, i, label, scrollY, updatedAt }
-  localVisits: null,           // compteur local, sans backend
 };
 
 function loadState() {
@@ -60,7 +59,6 @@ function loadState() {
       completionCount: typeof parsed.completionCount === "number" ? parsed.completionCount : 0,
       readerMode: ["normal", "night"].includes(parsed.readerMode) ? parsed.readerMode : "normal",
       lastReading: (parsed.lastReading && typeof parsed.lastReading === "object") ? parsed.lastReading : null,
-      localVisits: (parsed.localVisits && typeof parsed.localVisits === "object") ? parsed.localVisits : null,
     };
   } catch {
     return { ...defaultState };
@@ -72,16 +70,24 @@ function saveState() {
 }
 
 let state = loadState();
+let globalStats = null;
+let globalStatsLoading = false;
+let globalStatsLoadedAt = 0;
 
-function registerLocalVisit() {
-  const now = new Date().toISOString();
-  const current = state.localVisits && typeof state.localVisits === "object" ? state.localVisits : {};
-  state.localVisits = {
-    count: Math.max(0, Number(current.count || 0)) + 1,
-    firstAt: current.firstAt || now,
-    lastAt: now,
-  };
-  saveState();
+async function refreshGlobalStats() {
+  if (globalStatsLoading || Date.now() - globalStatsLoadedAt < 60000) return;
+  globalStatsLoading = true;
+  const stats = await fetchGlobalStats();
+  globalStatsLoading = false;
+  if (!stats) {
+    globalStats = { total_users: null, installed_users: null };
+    globalStatsLoadedAt = Date.now();
+    if (getRoute().name === "stats") render();
+    return;
+  }
+  globalStats = stats;
+  globalStatsLoadedAt = Date.now();
+  if (getRoute().name === "stats") render();
 }
 
 // ------------------------------------------------------------
@@ -950,6 +956,13 @@ function viewStats() {
   const pct = progressPct();
   const C = 2 * Math.PI * 60;
   const offset = C - (pct / 100) * C;
+  const hasGlobalVisitors = Number.isFinite(Number(globalStats?.total_users));
+  const hasInstalledUsers = Number.isFinite(Number(globalStats?.installed_users));
+  const globalVisitors = hasGlobalVisitors ? Number(globalStats.total_users) : null;
+  const installedUsers = hasInstalledUsers ? Number(globalStats.installed_users) : null;
+  const globalCaption = hasGlobalVisitors
+    ? "Ces chiffres viennent de Supabase, sans compte et sans nom."
+    : "Connexion aux stats globales... Si rien ne charge, Supabase n'est pas connecté sur ce build.";
   return `
     <div class="shell">
       ${topbar({ title: "Stats" })}
@@ -1020,10 +1033,18 @@ function viewStats() {
 
           <div class="visitor-counter" aria-live="polite">
             <div class="visitor-counter__icon">${I.users}</div>
-            <div>
-              <div class="visitor-counter__label">Ouvertures locales de Mission 31</div>
-              <div class="visitor-counter__value">${Number(state.localVisits?.count || 1).toLocaleString("fr-FR")}</div>
-              <div class="visitor-counter__caption">Compteur front sécurisé, stocké uniquement sur cet appareil.</div>
+            <div class="visitor-counter__body">
+              <div class="visitor-counter__grid">
+                <div>
+                  <div class="visitor-counter__label">Personnes au courant</div>
+                  <div class="visitor-counter__value">${hasGlobalVisitors ? globalVisitors.toLocaleString("fr-FR") : "..."}</div>
+                </div>
+                <div>
+                  <div class="visitor-counter__label">Participants installés</div>
+                  <div class="visitor-counter__value">${hasInstalledUsers ? installedUsers.toLocaleString("fr-FR") : "..."}</div>
+                </div>
+              </div>
+              <div class="visitor-counter__caption">${globalCaption}</div>
             </div>
           </div>
 
@@ -1071,7 +1092,7 @@ function viewRewards() {
               const isUnlocked = completionCount >= b.required;
               return `
                 <div class="badge ${isUnlocked ? "" : "badge--locked"}">
-                  <div class="badge__icon badge__icon--emoji">${escapeHtml(b.emoji)}</div>
+                  <div class="badge__icon">${b.icon}</div>
                   <div class="badge__name">${escapeHtml(b.name)}</div>
                   <div class="badge__desc">${escapeHtml(b.desc)}</div>
                 </div>`;
@@ -1080,7 +1101,7 @@ function viewRewards() {
 
           ${completionCount > 0 ? `
             <div class="card" style="margin-top:16px;text-align:center;padding:14px;">
-              <div class="tour-count-emoji">${escapeHtml(TOUR_BADGES[0].emoji)}</div>
+              <div style="display:flex;justify-content:center;margin-bottom:6px;color:var(--primary);">${TOUR_BADGES[0].icon}</div>
               <div style="font-weight:700;color:var(--primary);">${completionCount} tour${completionCount > 1 ? "s" : ""} accompli${completionCount > 1 ? "s" : ""}</div>
               <div style="font-size:13px;color:var(--ink-faint);margin-top:4px;">Tu continues à creuser la Parole.</div>
             </div>
@@ -1298,7 +1319,7 @@ function viewCompletion() {
               <div class="tour-badge-row">
                 ${earnedTourBadges.map((b) => `
                   <div class="tour-badge">
-                    <span class="tour-badge__emoji">${escapeHtml(b.emoji)}</span>
+                    <span class="tour-badge__icon">${b.icon}</span>
                     <span class="tour-badge__name">${escapeHtml(b.name)}</span>
                     <span class="tour-badge__desc">${escapeHtml(b.desc)}</span>
                   </div>
@@ -1919,6 +1940,8 @@ function render() {
   // Hooks après-rendu (chargements asynchrones par vue)
   if (route === "bible") {
     renderBibleContent(r.params || {});
+  } else if (route === "stats") {
+    refreshGlobalStats();
   }
 }
 
@@ -2521,8 +2544,11 @@ function showNoteModal(day, chapterRef) {
 }
 
 window.appInstalled && window.removeEventListener("appinstalled", window.appInstalled);
-window.addEventListener("appinstalled", () => {
+window.addEventListener("appinstalled", async () => {
   document.querySelector(".install-banner")?.remove();
+  await markInstalled();
+  globalStatsLoadedAt = 0;
+  refreshGlobalStats();
   setTimeout(hideInstallProgress, 800);
   setTimeout(() => {
     window.location.reload();
@@ -2790,7 +2816,6 @@ if ("serviceWorker" in navigator) {
 // Boot
 // ------------------------------------------------------------
 window.__accSelection = 1;
-registerLocalVisit();
 render();
 attachInstallBanner(); // affiche la bannière même sans beforeinstallprompt (iOS, etc.)
 registerUser();        // synchronisation anonyme si Supabase est configuré (silencieux)

@@ -691,6 +691,15 @@ html[data-theme="dark"] .notif-banner--err  { background: rgba(139,26,26,0.15); 
   width: 22px;
   height: 22px;
 }
+.visitor-counter__body {
+  flex: 1;
+  min-width: 0;
+}
+.visitor-counter__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
 .visitor-counter__label {
   font-size: 12px;
   font-weight: 600;
@@ -707,6 +716,15 @@ html[data-theme="dark"] .notif-banner--err  { background: rgba(139,26,26,0.15); 
   font-size: 11px;
   line-height: 1.35;
   color: rgba(255, 255, 255, 0.62);
+}
+@media (max-width: 380px) {
+  .visitor-counter {
+    align-items: flex-start;
+  }
+  .visitor-counter__grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
 }
 
 .encourage {
@@ -755,20 +773,10 @@ html[data-theme="dark"] .notif-banner--err  { background: rgba(139,26,26,0.15); 
   color: #fff;
   margin-bottom: 10px;
 }
-.badge__icon--emoji {
-  font-size: 28px;
-  line-height: 1;
-}
 .badge--locked .badge__icon { background: var(--surface-muted); color: var(--ink-faint); }
 .badge--locked { opacity: 0.65; }
 .badge__name { font-size: 13px; font-weight: 600; }
 .badge__desc { font-size: 11px; color: var(--ink-faint); margin-top: 2px; }
-
-.tour-count-emoji {
-  font-size: 26px;
-  line-height: 1;
-  margin-bottom: 6px;
-}
 
 .celeb-badge-card {
   display: flex;

@@ -433,6 +433,8 @@ create table mission31_users (
   client_id uuid primary key,
   days_completed int not null default 0,
   completed boolean not null default false,
+  installed boolean not null default false,
+  installed_at timestamptz,
   updated_at timestamptz not null default now()
 );
 
@@ -444,6 +446,25 @@ create function mission31_get_stats() returns json
 language sql security definer as $$
   select json_build_object(
     'total_users', count(*),
+    'installed_users', count(*) filter (where installed),
+    'completed_missions', count(*) filter (where completed),
+    'completion_rate', round(100.0 * count(*) filter (where completed) / nullif(count(*), 0), 1)
+  ) from mission31_users;
+$$;
+```
+
+Si la table existe déjà sans les colonnes d'installation :
+
+```sql
+alter table mission31_users
+  add column if not exists installed boolean not null default false,
+  add column if not exists installed_at timestamptz;
+
+create or replace function mission31_get_stats() returns json
+language sql security definer as $$
+  select json_build_object(
+    'total_users', count(*),
+    'installed_users', count(*) filter (where installed),
     'completed_missions', count(*) filter (where completed),
     'completion_rate', round(100.0 * count(*) filter (where completed) / nullif(count(*), 0), 1)
   ) from mission31_users;
