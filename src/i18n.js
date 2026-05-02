@@ -96,7 +96,7 @@ export const FR = {
   stats_global_title: "Communauté",
   stats_visitors_title: "Ont entendu parler de Mission 31",
   stats_installed_title: "Sont dans la mission",
-  stats_visitors_caption: "Personnes ayant ouvert ou installé l'app depuis le début de Mission 31.",
+  stats_visitors_caption: "Vous n'êtes pas seul : ces chiffres sont partagés par toute la communauté Mission 31.",
   stats_unavail: "Pas encore disponible",
   stats_loading: "...",
 
@@ -446,7 +446,7 @@ export const EN = {
   stats_global_title: "Community",
   stats_visitors_title: "Have heard of Mission 31",
   stats_installed_title: "Are on the mission",
-  stats_visitors_caption: "People who opened or installed the app since Mission 31 started.",
+  stats_visitors_caption: "You are not alone: these numbers are shared across the whole Mission 31 community.",
   stats_unavail: "Not available yet",
   stats_loading: "...",
 
