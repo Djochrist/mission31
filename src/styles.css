@@ -242,12 +242,13 @@ input, textarea, select {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 16px;
+  gap: 14px;
+  min-height: 196px;
   margin-top: auto;
 }
 
 .splash__verse {
-  margin: 2px auto 0;
+  margin: auto auto 0;
   font-size: 13px;
   color: rgba(255,255,255,0.65);
   font-style: italic;
@@ -262,6 +263,7 @@ input, textarea, select {
   align-items: center;
   justify-content: flex-end;
   gap: 14px;
+  margin-bottom: 6px;
 }
 
 .splash__verse small {

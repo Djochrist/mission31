@@ -661,13 +661,13 @@ function viewWelcome() {
         </div>
         <div class="splash__cta">
           <button class="btn" data-action="start">${T().welcome_start}</button>
+          <div class="splash__footer">
+            ${langSwitcher()}
+          </div>
           <p class="splash__verse">
             ${T().welcome_verse}
             <small>${T().welcome_verse_ref}</small>
           </p>
-          <div class="splash__footer">
-            ${langSwitcher()}
-          </div>
         </div>
       </div>
     </div>`;
