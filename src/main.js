@@ -652,22 +652,24 @@ function viewWelcome() {
   return `
     <div class="shell shell--dark">
       <div class="splash">
-        <div class="splash__hero">
-          <div class="splash__icon-wrap">
-            <img class="splash__app-icon" src="${appIconUrl}" alt="Mission 31" />
+        <div class="splash__content">
+          <div class="splash__hero">
+            <div class="splash__icon-wrap">
+              <img class="splash__app-icon" src="${appIconUrl}" alt="Mission 31" />
+            </div>
+            <h1 class="splash__title">Mission <span>31</span></h1>
+            <p class="splash__subtitle">${T().welcome_subtitle}</p>
           </div>
-          <h1 class="splash__title">Mission <span>31</span></h1>
-          <p class="splash__subtitle">${T().welcome_subtitle}</p>
-        </div>
-        <div class="splash__cta">
-          <button class="btn" data-action="start">${T().welcome_start}</button>
-          <div class="splash__footer">
-            ${langSwitcher()}
+          <div class="splash__cta">
+            <button class="btn" data-action="start">${T().welcome_start}</button>
+            <div class="splash__footer">
+              ${langSwitcher()}
+            </div>
+            <p class="splash__verse">
+              ${T().welcome_verse}
+              <small>${T().welcome_verse_ref}</small>
+            </p>
           </div>
-          <p class="splash__verse">
-            ${T().welcome_verse}
-            <small>${T().welcome_verse_ref}</small>
-          </p>
         </div>
       </div>
     </div>`;

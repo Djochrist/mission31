@@ -172,7 +172,7 @@ input, textarea, select {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 18px;
   padding: calc(24px + var(--safe-top)) 24px calc(30px + var(--safe-bottom));
   background:
@@ -193,6 +193,18 @@ input, textarea, select {
     radial-gradient(2px 2px at 85% 30%, rgba(255,255,255,0.45), transparent);
   pointer-events: none;
   opacity: 0.7;
+}
+
+.splash__content {
+  z-index: 1;
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  margin: auto 0;
 }
 
 .splash__hero {
@@ -238,12 +250,11 @@ input, textarea, select {
 .splash__cta {
   width: 100%;
   max-width: 340px;
-  z-index: 1;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  align-items: center;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: 0;
 }
 
 .splash__verse {
@@ -260,9 +271,10 @@ input, textarea, select {
 .splash__footer {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 14px;
   margin-bottom: 2px;
+  width: 100%;
 }
 
 .splash__verse small {
@@ -295,8 +307,8 @@ input, textarea, select {
 /* On light bg (settings) */
 .shell:not(.shell--dark) .lang-switcher__label { color: var(--ink-faint); }
 .splash__footer .lang-switcher {
-  margin-left: auto;
-  align-items: flex-end;
+  margin: 0 auto;
+  align-items: center;
 }
 
 .lang-switcher__actions {
