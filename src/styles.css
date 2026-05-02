@@ -173,8 +173,8 @@ input, textarea, select {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  gap: 24px;
-  padding: calc(34px + var(--safe-top)) 24px calc(28px + var(--safe-bottom));
+  gap: 18px;
+  padding: calc(24px + var(--safe-top)) 24px calc(30px + var(--safe-bottom));
   background:
     linear-gradient(180deg, rgba(10,46,46,0.55) 0%, rgba(10,46,46,0.95) 65%, rgba(10,46,46,1) 100%),
     radial-gradient(ellipse at top, #1d5050 0%, #0a2e2e 70%);
@@ -196,15 +196,15 @@ input, textarea, select {
 }
 
 .splash__hero {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   text-align: center;
   z-index: 1;
   width: 100%;
-  padding-top: 12px;
+  padding-top: 6px;
 }
 
 .splash__icon {
@@ -242,13 +242,12 @@ input, textarea, select {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 14px;
-  min-height: 196px;
-  margin-top: auto;
+  gap: 12px;
+  margin-top: 8px;
 }
 
 .splash__verse {
-  margin: auto auto 0;
+  margin: 8px auto 0;
   font-size: 13px;
   color: rgba(255,255,255,0.65);
   font-style: italic;
@@ -263,7 +262,7 @@ input, textarea, select {
   align-items: center;
   justify-content: flex-end;
   gap: 14px;
-  margin-bottom: 6px;
+  margin-bottom: 2px;
 }
 
 .splash__verse small {
