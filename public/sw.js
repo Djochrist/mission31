@@ -1,11 +1,11 @@
 // Service Worker for Mission 31 PWA
 // Strategy: cache-first for app shell, network-first for navigation.
-// In local development (localhost), the SW is a pass-through to avoid
-// serving stale JS modules during hot-module-reload.
+// In local development (localhost or Replit dev), the SW is a pass-through to
+// avoid serving stale JS modules during hot-module-reload.
 
-// VERSION est remplacée au build par un identifiant unique (vite plugin),
-// ce qui force le navigateur à invalider l'ancien cache à chaque déploiement.
-const VERSION = "mission31-v20260501";
+// VERSION is replaced at build time by a unique identifier (vite plugin),
+// forcing the browser to invalidate cached assets on every deployment.
+const VERSION = "mission31-__BUILD_ID__";
 const IS_DEV = self.location.hostname === "localhost"
   || self.location.hostname === "127.0.0.1";
 
@@ -18,9 +18,10 @@ const SHELL = [
   "./icons/icon-512.png",
   "./icons/icon-maskable-512.png",
   "./icons/apple-touch-icon.png",
-  // Texte intégral du Nouveau Testament (Louis Segond 1910).
-  // Précaché pour permettre la lecture 100% hors ligne.
+  // Texte intégral du Nouveau Testament — FR (Louis Segond 1910) + EN (KJV).
+  // Précachés pour permettre la lecture 100% hors ligne dans les deux langues.
   "./bible/lsg-nt.json",
+  "./bible/kjv-nt.json",
 ];
 
 async function broadcast(message) {

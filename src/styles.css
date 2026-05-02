@@ -256,6 +256,65 @@ input, textarea, select {
 }
 
 /* ============================================================
+   LANGUAGE SWITCHER
+   ============================================================ */
+.lang-switcher {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.lang-switcher__label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.55);
+}
+/* On dark bg (splash) */
+.shell--dark .lang-switcher__label { color: rgba(255,255,255,0.55); }
+/* On light bg (settings) */
+.shell:not(.shell--dark) .lang-switcher__label { color: var(--ink-faint); }
+
+.lang-switcher__btns {
+  display: flex;
+  gap: 8px;
+}
+.lang-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  background: rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.7);
+  border: 1.5px solid rgba(255,255,255,0.15);
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+  cursor: pointer;
+  width: auto;
+}
+.lang-btn:active { transform: scale(0.96); }
+.lang-btn--active {
+  background: var(--primary, #2d8a8a);
+  color: #fff;
+  border-color: var(--primary, #2d8a8a);
+}
+/* On light bg */
+.shell:not(.shell--dark) .lang-btn {
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+  border-color: var(--line);
+}
+.shell:not(.shell--dark) .lang-btn--active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* ============================================================
    BUTTONS
    ============================================================ */
 .btn {
