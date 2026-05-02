@@ -625,15 +625,18 @@ function tabbar(active) {
     </div></nav>`;
 }
 
-// Sélecteur de langue (boutons FR / EN)
+// Sélecteur de langue
 function langSwitcher() {
   const lang = getLang();
   return `
     <div class="lang-switcher">
-      <span class="lang-switcher__label">${T().welcome_lang_label}</span>
-      <div class="lang-switcher__btns">
-        <button class="lang-btn ${lang === "fr" ? "lang-btn--active" : ""}" data-action="lang-set" data-lang="fr">🇫🇷 ${T().lang_fr}</button>
-        <button class="lang-btn ${lang === "en" ? "lang-btn--active" : ""}" data-action="lang-set" data-lang="en">🇬🇧 ${T().lang_en}</button>
+      <label class="lang-switcher__label" for="languageSelect">${T().welcome_lang_label}</label>
+      <div class="lang-switcher__select-wrap">
+        <select id="languageSelect" class="lang-select" data-action="lang-set" aria-label="${T().welcome_lang_label}">
+          <option value="fr" ${lang === "fr" ? "selected" : ""}>FR · ${T().lang_fr}</option>
+          <option value="en" ${lang === "en" ? "selected" : ""}>EN · ${T().lang_en}</option>
+        </select>
+        <span class="lang-switcher__chevron" aria-hidden="true">⌄</span>
       </div>
     </div>`;
 }
@@ -645,7 +648,7 @@ function viewWelcome() {
   return `
     <div class="shell shell--dark">
       <div class="splash">
-        <div></div>
+        ${langSwitcher()}
         <div class="splash__hero">
           <div class="splash__icon-wrap">
             <img class="splash__app-icon" src="${appIconUrl}" alt="Mission 31" />
@@ -654,7 +657,6 @@ function viewWelcome() {
           <p class="splash__subtitle">${T().welcome_subtitle}</p>
         </div>
         <div class="splash__cta">
-          ${langSwitcher()}
           <button class="btn" data-action="start">${T().welcome_start}</button>
           <p class="splash__verse">
             ${T().welcome_verse}
@@ -2019,13 +2021,18 @@ document.addEventListener("click", (e) => {
   }
 });
 
+document.addEventListener("change", (e) => {
+  const actionEl = e.target.closest("[data-action]");
+  if (actionEl) handleAction(actionEl);
+});
+
 function handleAction(actionEl) {
   const action = actionEl.dataset.action;
   const lang = getLang();
 
   switch (action) {
     case "lang-set": {
-      const newLang = actionEl.dataset.lang;
+      const newLang = actionEl.dataset.lang || actionEl.value;
       if (["fr", "en"].includes(newLang)) {
         state.lang = newLang;
         saveState();

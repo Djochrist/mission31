@@ -172,8 +172,9 @@ input, textarea, select {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  padding: 60px 28px calc(40px + var(--safe-bottom));
+  justify-content: center;
+  gap: 34px;
+  padding: calc(34px + var(--safe-top)) 24px calc(34px + var(--safe-bottom));
   background:
     linear-gradient(180deg, rgba(10,46,46,0.55) 0%, rgba(10,46,46,0.95) 65%, rgba(10,46,46,1) 100%),
     radial-gradient(ellipse at top, #1d5050 0%, #0a2e2e 70%);
@@ -195,13 +196,15 @@ input, textarea, select {
 }
 
 .splash__hero {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   z-index: 1;
+  width: 100%;
+  padding-top: 42px;
 }
 
 .splash__icon {
@@ -234,11 +237,16 @@ input, textarea, select {
 
 .splash__cta {
   width: 100%;
+  max-width: 340px;
   z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
 }
 
 .splash__verse {
-  margin-top: 28px;
+  margin: 2px auto 0;
   font-size: 13px;
   color: rgba(255,255,255,0.65);
   font-style: italic;
@@ -261,14 +269,15 @@ input, textarea, select {
 .lang-switcher {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  align-items: flex-start;
+  gap: 5px;
+  margin-bottom: 0;
+  width: fit-content;
 }
 .lang-switcher__label {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(255,255,255,0.55);
 }
@@ -277,41 +286,65 @@ input, textarea, select {
 /* On light bg (settings) */
 .shell:not(.shell--dark) .lang-switcher__label { color: var(--ink-faint); }
 
-.lang-switcher__btns {
-  display: flex;
-  gap: 8px;
-}
-.lang-btn {
+.lang-switcher__select-wrap {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 18px;
-  border-radius: 20px;
-  font-size: 14px;
-  font-weight: 600;
-  background: rgba(255,255,255,0.10);
-  color: rgba(255,255,255,0.7);
-  border: 1.5px solid rgba(255,255,255,0.15);
-  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
-  cursor: pointer;
-  width: auto;
 }
-.lang-btn:active { transform: scale(0.96); }
-.lang-btn--active {
-  background: var(--primary, #2d8a8a);
-  color: #fff;
-  border-color: var(--primary, #2d8a8a);
+.lang-select {
+  min-width: 126px;
+  height: 38px;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.9);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0 34px 0 14px;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.16);
+  backdrop-filter: blur(12px);
+}
+.lang-select:focus {
+  outline: none;
+  border-color: rgba(255,255,255,0.46);
+  background: rgba(255,255,255,0.15);
+}
+.lang-select option {
+  background: var(--surface);
+  color: var(--ink);
+}
+.lang-switcher__chevron {
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  transform: translateY(-58%);
+  color: rgba(255,255,255,0.72);
+  font-size: 16px;
+  line-height: 1;
+  pointer-events: none;
+}
+.splash > .lang-switcher {
+  position: absolute;
+  top: calc(var(--safe-top) + 14px);
+  right: 16px;
+  z-index: 2;
 }
 /* On light bg */
-.shell:not(.shell--dark) .lang-btn {
-  background: var(--surface-muted);
-  color: var(--ink-soft);
+.shell:not(.shell--dark) .lang-select {
+  background: var(--surface);
+  color: var(--ink);
   border-color: var(--line);
+  box-shadow: var(--shadow-soft);
 }
-.shell:not(.shell--dark) .lang-btn--active {
-  background: var(--primary);
-  color: #fff;
+.shell:not(.shell--dark) .lang-select:focus {
   border-color: var(--primary);
+  background: var(--surface);
+}
+.shell:not(.shell--dark) .lang-switcher__chevron {
+  color: var(--ink-faint);
 }
 
 /* ============================================================
@@ -2099,7 +2132,7 @@ html[data-theme="dark"] .bv--hl-pink   { background: rgba(252, 88, 155, 0.18); }
 /* ============================================================
    FORM FIELDS — select dropdown
    ============================================================ */
-select {
+select:not(.lang-select) {
   width: 100%;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
@@ -2115,9 +2148,9 @@ select {
   background-position: right 12px center;
   padding-right: 32px;
 }
-select:focus { border-color: var(--primary); outline: none; }
+select:not(.lang-select):focus { border-color: var(--primary); outline: none; }
 
-html[data-theme="dark"] select {
+html[data-theme="dark"] select:not(.lang-select) {
   background-color: var(--surface);
   border-color: var(--line);
 }
