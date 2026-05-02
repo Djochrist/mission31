@@ -626,17 +626,21 @@ function tabbar(active) {
 }
 
 // Sélecteur de langue
-function langSwitcher() {
+function langSwitcher(variant = "compact") {
   const lang = getLang();
+  const isSettings = variant === "settings";
   return `
-    <div class="lang-switcher">
-      <label class="lang-switcher__label" for="languageSelect">${T().welcome_lang_label}</label>
-      <div class="lang-switcher__select-wrap">
-        <select id="languageSelect" class="lang-select" data-action="lang-set" aria-label="${T().welcome_lang_label}">
-          <option value="fr" ${lang === "fr" ? "selected" : ""}>FR · ${T().lang_fr}</option>
-          <option value="en" ${lang === "en" ? "selected" : ""}>EN · ${T().lang_en}</option>
-        </select>
-        <span class="lang-switcher__chevron" aria-hidden="true">⌄</span>
+    <div class="lang-switcher ${isSettings ? "lang-switcher--settings" : ""}">
+      ${isSettings ? "" : `<span class="lang-switcher__label">${T().welcome_lang_label}</span>`}
+      <div class="lang-switcher__actions ${isSettings ? "lang-switcher__actions--settings" : ""}" role="group" aria-label="${T().welcome_lang_label}">
+        <button type="button" class="lang-chip ${isSettings ? "lang-chip--settings" : ""} ${lang === "fr" ? "lang-chip--active" : ""}" data-action="lang-set" data-lang="fr" aria-pressed="${lang === "fr" ? "true" : "false"}">
+          <span class="lang-chip__flag" aria-hidden="true">🇫🇷</span>
+          <span class="lang-chip__text">FR</span>
+        </button>
+        <button type="button" class="lang-chip ${isSettings ? "lang-chip--settings" : ""} ${lang === "en" ? "lang-chip--active" : ""}" data-action="lang-set" data-lang="en" aria-pressed="${lang === "en" ? "true" : "false"}">
+          <span class="lang-chip__flag" aria-hidden="true">🇬🇧</span>
+          <span class="lang-chip__text">EN</span>
+        </button>
       </div>
     </div>`;
 }
@@ -648,12 +652,12 @@ function viewWelcome() {
   return `
     <div class="shell shell--dark">
       <div class="splash">
-        ${langSwitcher()}
         <div class="splash__hero">
           <div class="splash__icon-wrap">
             <img class="splash__app-icon" src="${appIconUrl}" alt="Mission 31" />
-            <span class="splash__m31">M31</span>
           </div>
+          <h1 class="splash__title">Mission <span>31</span></h1>
+          <span class="splash__m31">Nouveau Testament</span>
           <p class="splash__subtitle">${T().welcome_subtitle}</p>
         </div>
         <div class="splash__cta">
@@ -662,6 +666,13 @@ function viewWelcome() {
             ${T().welcome_verse}
             <small>${T().welcome_verse_ref}</small>
           </p>
+          <div class="splash__footer">
+            <div class="splash__brand">
+              <img class="splash__brand-logo" src="${appIconUrl}" alt="" aria-hidden="true" />
+              <span class="splash__brand-name">Mission 31</span>
+            </div>
+            ${langSwitcher()}
+          </div>
         </div>
       </div>
     </div>`;
@@ -1797,7 +1808,7 @@ function viewSettings() {
           <div class="card">
             <h3 class="settings__section-title">🌐 ${T().settings_lang_title}</h3>
             <p class="settings__section-sub">${T().settings_lang_sub}</p>
-            ${langSwitcher()}
+            ${langSwitcher("settings")}
           </div>
 
           <div class="card">
@@ -2021,18 +2032,13 @@ document.addEventListener("click", (e) => {
   }
 });
 
-document.addEventListener("change", (e) => {
-  const actionEl = e.target.closest("[data-action]");
-  if (actionEl) handleAction(actionEl);
-});
-
 function handleAction(actionEl) {
   const action = actionEl.dataset.action;
   const lang = getLang();
 
   switch (action) {
     case "lang-set": {
-      const newLang = actionEl.dataset.lang || actionEl.value;
+      const newLang = actionEl.dataset.lang;
       if (["fr", "en"].includes(newLang)) {
         state.lang = newLang;
         saveState();
