@@ -657,7 +657,6 @@ function viewWelcome() {
             <img class="splash__app-icon" src="${appIconUrl}" alt="Mission 31" />
           </div>
           <h1 class="splash__title">Mission <span>31</span></h1>
-          <span class="splash__m31">Nouveau Testament</span>
           <p class="splash__subtitle">${T().welcome_subtitle}</p>
         </div>
         <div class="splash__cta">
@@ -667,10 +666,6 @@ function viewWelcome() {
             <small>${T().welcome_verse_ref}</small>
           </p>
           <div class="splash__footer">
-            <div class="splash__brand">
-              <img class="splash__brand-logo" src="${appIconUrl}" alt="" aria-hidden="true" />
-              <span class="splash__brand-name">Mission 31</span>
-            </div>
             ${langSwitcher()}
           </div>
         </div>
