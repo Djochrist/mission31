@@ -379,7 +379,7 @@ Dans `index.html`, conditionné à la production :
 ```js
 if ('serviceWorker' in navigator
   && !location.hostname.includes('localhost')
-  && !location.hostname.includes('replit.dev')) {
+  && !location.hostname.includes('replit.dev') {
   navigator.serviceWorker.register('./sw.js');
 }
 ```

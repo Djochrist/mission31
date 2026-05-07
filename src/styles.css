@@ -1124,6 +1124,37 @@ html[data-theme="dark"] .notif-banner--err  { background: rgba(139,26,26,0.15); 
 .offline__title { font-size: 22px; font-weight: 700; margin: 0; }
 .offline__msg { font-size: 14px; color: var(--ink-soft); max-width: 300px; line-height: 1.55; }
 .offline .btn { max-width: 280px; }
+.offline__section { width: 100%; max-width: 320px; margin-top: 8px; text-align: left; }
+.offline__section-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 12px;
+}
+.offline__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.offline__action-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 18px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s;
+  color: var(--ink);
+}
+.offline__action-btn:hover { background: var(--surface-muted); border-color: var(--primary); }
+.offline__action-icon { color: var(--primary); flex-shrink: 0; display: flex; align-items: center; }
+.offline__action-label { font-size: 15px; font-weight: 600; }
 
 /* ============================================================
    REMINDERS
@@ -1494,6 +1525,34 @@ html[data-theme="dark"] .notif-banner--err  { background: rgba(139,26,26,0.15); 
   margin-bottom: 12px;
 }
 .modal__icon svg { width: 28px; height: 28px; }
+.modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.modal__head .modal__title { margin-bottom: 0; }
+.modal__close-btn {
+  background: var(--surface-muted);
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.modal__close-btn:hover { background: var(--border); color: var(--ink); }
+.modal__ref {
+  font-size: 13px;
+  color: var(--ink-faint);
+  margin: 0 0 12px;
+}
 .modal__title {
   font-size: 18px;
   font-weight: 700;
@@ -2037,6 +2096,36 @@ html[data-theme="dark"] .reading__chapter:hover { background: var(--surface-mute
   flex-direction: column;
   gap: 8px;
 }
+.note-modal__actions {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  margin-top: 16px;
+}
+.note-modal__actions .btn { flex: 1; }
+.note-draft-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent);
+  border-radius: 8px;
+  padding: 7px 12px;
+  margin-bottom: 12px;
+}
+.note-draft-status {
+  font-size: 11px;
+  color: var(--ink-faint);
+  text-align: right;
+  margin-top: 6px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  min-height: 16px;
+}
+.note-draft-status--visible { opacity: 1; }
 
 .notes-filter {
   display: flex;

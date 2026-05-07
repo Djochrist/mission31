@@ -135,9 +135,14 @@ export const FR = {
 
   // ── Hors ligne ───────────────────────────────────────────────
   offline_title: "Mode hors ligne",
-  offline_heading: "Pas de connexion Internet",
-  offline_msg: "Aucun souci ! Tu peux continuer ta lecture. Tes données seront synchronisées dès que tu seras de nouveau connecté.",
+  offline_heading: "Tu es hors ligne",
+  offline_msg: "Pas d'inquiétude — la Bible complète et tes notes sont disponibles sans connexion.",
   offline_btn: "Compris",
+  offline_available_title: "Disponible hors ligne",
+  offline_read_bible: "Lire la Bible",
+  offline_my_notes: "Mes notes",
+  offline_my_progress: "Mon avancement",
+  offline_back_online: "Tu es de nouveau connecté !",
 
   // ── Rappels ──────────────────────────────────────────────────
   rem_title: "Rappels",
@@ -342,6 +347,9 @@ export const FR = {
   quick_note_content_label: "Ma note",
   quick_note_content_placeholder: "Écris tes réflexions, insights...",
   quick_note_save: "Enregistrer",
+  quick_note_cancel: "Annuler",
+  quick_note_draft_restored: "Brouillon restauré",
+  quick_note_draft_saved: "Brouillon sauvegardé",
 
   // ── Couleurs surlignage ──────────────────────────────────────
   color_yellow: "Jaune",
@@ -485,9 +493,14 @@ export const EN = {
 
   // ── Offline ──────────────────────────────────────────────────
   offline_title: "Offline mode",
-  offline_heading: "No internet connection",
-  offline_msg: "No worries! You can continue your reading. Your data will sync once you're back online.",
+  offline_heading: "You are offline",
+  offline_msg: "No worries — the full Bible and your notes are available without a connection.",
   offline_btn: "Got it",
+  offline_available_title: "Available offline",
+  offline_read_bible: "Read the Bible",
+  offline_my_notes: "My notes",
+  offline_my_progress: "My progress",
+  offline_back_online: "You're back online!",
 
   // ── Reminders ────────────────────────────────────────────────
   rem_title: "Reminders",
@@ -692,6 +705,9 @@ export const EN = {
   quick_note_content_label: "My note",
   quick_note_content_placeholder: "Write your reflections, insights...",
   quick_note_save: "Save",
+  quick_note_cancel: "Cancel",
+  quick_note_draft_restored: "Draft restored",
+  quick_note_draft_saved: "Draft saved",
 
   // ── Highlight colors ──────────────────────────────────────────
   color_yellow: "Yellow",

@@ -1204,6 +1204,7 @@ function viewHelp() {
 }
 
 function viewOffline() {
+  const day = currentDay();
   return `
     <div class="shell">
       ${topbar({
@@ -1215,7 +1216,24 @@ function viewOffline() {
           <div class="offline__icon">${I.wifiOff}</div>
           <h2 class="offline__title">${T().offline_heading}</h2>
           <p class="offline__msg">${T().offline_msg}</p>
-          <button class="btn" data-action="back">${T().offline_btn}</button>
+
+          <div class="offline__section">
+            <h3 class="offline__section-title">${T().offline_available_title}</h3>
+            <div class="offline__actions">
+              <button class="offline__action-btn" data-nav="bible?day=${day}">
+                <span class="offline__action-icon">${I.bibleSmall}</span>
+                <span class="offline__action-label">${T().offline_read_bible}</span>
+              </button>
+              <button class="offline__action-btn" data-nav="notes">
+                <span class="offline__action-icon">${I.pen}</span>
+                <span class="offline__action-label">${T().offline_my_notes}</span>
+              </button>
+              <button class="offline__action-btn" data-nav="home">
+                <span class="offline__action-icon">${I.flame}</span>
+                <span class="offline__action-label">${T().offline_my_progress}</span>
+              </button>
+            </div>
+          </div>
         </div>
       </main>
     </div>`;
@@ -1888,7 +1906,13 @@ const VIEWS = {
 
 function render() {
   const r = getRoute();
-  const route = !navigator.onLine && r.name !== "welcome" ? "offline" : r.name;
+  // Routes that work fully offline (Bible pre-cached by SW, data in localStorage)
+  const OFFLINE_CAPABLE = new Set([
+    "welcome", "home", "reading", "bible", "notes", "memory",
+    "settings", "stats", "rewards", "how", "reminders",
+    "planning", "accelerated", "completion",
+  ]);
+  const route = !navigator.onLine && !OFFLINE_CAPABLE.has(r.name) ? "offline" : r.name;
   const view = VIEWS[route] || viewHome;
   document.getElementById("app").innerHTML = view(r.params || {});
   attachInstallBanner();
@@ -2167,6 +2191,11 @@ function handleAction(actionEl) {
       document.querySelector(".modal")?.remove();
       break;
     }
+    case "quick-note-cancel": {
+      clearNoteDraft();
+      document.querySelector(".note-modal")?.remove();
+      break;
+    }
     case "quick-note-save": {
       const day = parseInt(actionEl.dataset.day, 10) || currentDay();
       const chapterRef = actionEl.dataset.chapter || "";
@@ -2185,6 +2214,7 @@ function handleAction(actionEl) {
         updatedAt: now,
       });
       saveState();
+      clearNoteDraft();
       document.querySelector(".note-modal")?.remove();
       showToast(tMsg(TOASTS.noteSaved));
       break;
@@ -2435,8 +2465,27 @@ function showInstallModal({ title, steps, note }) {
 // ------------------------------------------------------------
 // Modale de note rapide
 // ------------------------------------------------------------
+const NOTE_DRAFT_KEY = "m31_note_draft";
+
+function saveNoteDraft(title, content) {
+  try { localStorage.setItem(NOTE_DRAFT_KEY, JSON.stringify({ title, content, savedAt: Date.now() })); } catch { /* noop */ }
+}
+
+function loadNoteDraft() {
+  try {
+    const raw = localStorage.getItem(NOTE_DRAFT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function clearNoteDraft() {
+  try { localStorage.removeItem(NOTE_DRAFT_KEY); } catch { /* noop */ }
+}
+
 function showNoteModal(day, chapterRef) {
   document.querySelector(".note-modal")?.remove();
+  const draft = loadNoteDraft();
+  const hasDraft = draft && (draft.title || draft.content);
   const el = document.createElement("div");
   el.className = "modal note-modal";
   el.setAttribute("role", "dialog");
@@ -2445,20 +2494,49 @@ function showNoteModal(day, chapterRef) {
   el.innerHTML = `
     <div class="modal__backdrop" data-action="modal-close"></div>
     <div class="modal__card">
-      <h3 class="modal__title">${I.pen} ${T().quick_note_title}</h3>
-      ${chapterRef ? `<p style="font-size:13px;color:var(--ink-faint);margin:0 0 10px;">${escapeHtml(chapterRef)}</p>` : ""}
+      <div class="modal__head">
+        <h3 class="modal__title">${I.pen} ${T().quick_note_title}</h3>
+        <button class="modal__close-btn" data-action="quick-note-cancel" aria-label="${T().quick_note_cancel}">✕</button>
+      </div>
+      ${chapterRef ? `<p class="modal__ref">${escapeHtml(chapterRef)}</p>` : ""}
+      ${hasDraft ? `<div class="note-draft-banner">${I.pen} ${T().quick_note_draft_restored}</div>` : ""}
       <div class="field">
         <label for="quickNoteTitle">${T().quick_note_title_label}</label>
-        <input type="text" id="quickNoteTitle" placeholder="${T().quick_note_title_placeholder}" autocomplete="off"/>
+        <input type="text" id="quickNoteTitle" placeholder="${T().quick_note_title_placeholder}" autocomplete="off" value="${escapeHtml(hasDraft ? (draft.title || "") : "")}"/>
       </div>
       <div class="field">
         <label for="quickNoteContent">${T().quick_note_content_label}</label>
-        <textarea id="quickNoteContent" rows="4" placeholder="${T().quick_note_content_placeholder}"></textarea>
+        <textarea id="quickNoteContent" rows="4" placeholder="${T().quick_note_content_placeholder}">${escapeHtml(hasDraft ? (draft.content || "") : "")}</textarea>
       </div>
-      <button class="btn" data-action="quick-note-save" data-day="${day}" data-chapter="${escapeHtml(chapterRef)}">${T().quick_note_save}</button>
+      <div class="note-modal__actions">
+        <button class="btn" data-action="quick-note-save" data-day="${day}" data-chapter="${escapeHtml(chapterRef)}">${T().quick_note_save}</button>
+        <button class="btn btn--ghost" data-action="quick-note-cancel">${T().quick_note_cancel}</button>
+      </div>
+      <div class="note-draft-status" id="noteDraftStatus"></div>
     </div>
   `;
   document.body.appendChild(el);
+
+  let draftTimer = null;
+  const titleInput = el.querySelector("#quickNoteTitle");
+  const contentInput = el.querySelector("#quickNoteContent");
+  const statusEl = el.querySelector("#noteDraftStatus");
+
+  function onInput() {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => {
+      saveNoteDraft(titleInput.value, contentInput.value);
+      if (statusEl) {
+        statusEl.textContent = T().quick_note_draft_saved;
+        statusEl.classList.add("note-draft-status--visible");
+        setTimeout(() => statusEl.classList.remove("note-draft-status--visible"), 2000);
+      }
+    }, 800);
+  }
+
+  titleInput?.addEventListener("input", onInput);
+  contentInput?.addEventListener("input", onInput);
+
   setTimeout(() => el.querySelector("textarea")?.focus(), 100);
 }
 
